@@ -1,5 +1,5 @@
 from typing import Literal
-from dataclasses import dataclass, fields, astuple
+from dataclasses import dataclass, fields, field, astuple
 from io import BufferedReader
 
 ByteOrder = Literal["little", "big"]
@@ -13,49 +13,46 @@ MAX_NOTE_COUNT = 31
 # addresses:
 SONGNAME_OFFSET = 0x0000
 SONGNAME_LEN = 20
-
+# ----
 SAMPLEARR_OFFSET = 0x0014
 SAMPLENAME_LEN = 22
 SAMPLEBLOCK_SIZE = 30
-
+# ----
 SONGLENGTH_OFFSET = 0x03B6
-
+# ----
 SEARCHUNTIL_OFFSET = 0x03B7
-
+# ----
 SONGPOS_OFFSET = 0x3B8
 SONGPOS_LEN = 128
-
+# ----
 MAGIC_OFFSET = 0x0438
-
+# ----
 PATTERNS_OFFSET = 0x043C
 NOTE_SIZE = 4
 
 # data types:
 @dataclass
-
-class Sample: # holds a sample track
+class Sample:    # holds a sample track
     name        : str   # sample name
     length      : int   # number of samples
     finetune    : int   # finetune value for dropping or lifting the pitch
     volume      : int   # volume
     repeatpoint : int   # no of byte offset from start of sample
     looplen     : int   # no of samples in loop [in bytes]
-    data        : list[int] = [0]  # the actual sample data, empty at first
+    data        : list = field(default_factory=list)  # the actual sample data, empty at first
 
-@dataclass # holds a note
-class Note:
-    period      : int = 0
-    duration    : int = 0
-    effect      : int = 0
+@dataclass
+class Note:     # holds a note
+    idx         : int
+    period      : int
+    effect      : int
 
-
-
-@dataclass  # holds a pattern with 4 channels with 31 notes each
-class Pattern:
-    ch1: list[Note] = [Note()]
-    ch2: list[Note] = [Note()]
-    ch3: list[Note] = [Note()]
-    ch4: list[Note] = [Note()]
+@dataclass
+class Pattern:  # holds a pattern with 4 channels with 31 notes each
+    ch1: list[Note] = field(default_factory=list)
+    ch2: list[Note] = field(default_factory=list)
+    ch3: list[Note] = field(default_factory=list)
+    ch4: list[Note] = field(default_factory=list)
     
     def __getitem__(self, index):
         return astuple(self)[index]
@@ -76,6 +73,22 @@ def readBlock(f: BufferedReader, offset: int, length: int) -> bytes:
     f.seek(offset)
     return f.read(length)
 
+# ---- data processing
+def extractBits(data: bytes, start: int, end: int) -> int:
+    wordlen = len(data) * 8
+    if (start < wordlen and start >= 0) and (end < wordlen and end >= 0) and (start <= end):
+        value = int.from_bytes(data, byteorder='big')
+        shifted = value >> (wordlen - end - 1)
+        result = shifted & (2**(end - start + 1) - 1)
+        return result
+    return -1
+
+def extractNoteInfo(data: bytes) -> tuple[int, int, int]:
+    idx = (extractBits(data, 0, 3) << 4) + extractBits(data, 15, 19)
+    period = extractBits(data, 4, 15)
+    effect = extractBits(data, 20, 31)
+    return idx, period, effect
+
 # ---- data structure operations
 
 # name of the song
@@ -90,7 +103,7 @@ def loadSamplesInfo(f: BufferedReader) -> list[Sample]:
         f.seek(SAMPLEARR_OFFSET + SAMPLEBLOCK_SIZE*i)
         name = toString(f.read(SAMPLENAME_LEN))
         length = toInt(f.read(2)) * 2
-        finetune = toInt(f.read(1)[0:4]) 
+        finetune = extractBits(f.read(1), 0, 3) 
         volume = toInt(f.read(1)) 
         repeatpoint = toInt(f.read(2)) * 2
         looplen = toInt(f.read(2)) * 2
@@ -118,19 +131,20 @@ def getMagicInfo(f: BufferedReader) -> str:
     return toString(data)
 
 def loadPatternData(f: BufferedReader) -> list[Pattern]:
-    num_patterns = max(loadSongPositions(f))
-    print("NUM PATTERNS:", num_patterns)
-    
-    for pattern_idx in range(num_patterns):
-        p = Pattern()
+    num_patterns = max(loadSongPositions(f))    
+    pattern_array = []
+    for i in range(num_patterns):
+        pattern = Pattern()
         for channel_idx in range(CHANNEL_COUNT):
             notelist = []
             for note_idx in range(MAX_NOTE_COUNT):
                 note_addr = PATTERNS_OFFSET + note_idx*NOTE_SIZE + channel_idx*NOTE_SIZE
-                note_data = readBlock(f, note_addr , 1)
-                notelist.append(Note())
-            p[channel_idx] = notelist
-    return None
+                note_data = readBlock(f, note_addr , 4)
+                idx, period, effect = extractNoteInfo(note_data)
+                notelist.append(Note(idx, period, effect))
+            pattern[channel_idx] = notelist
+        pattern_array.append(pattern)
+    return pattern_array
 
 # -----------------
 # testing:
@@ -139,7 +153,10 @@ if (not file.readable()):
     print("File couldn't be read")
     quit()
 
-# for sample in loadSamplesInfo(file):
-#     print(sample.finetune)
+data = b'\x01\xac\x3f\x08'
+result = extractBits(data, 16, 19)
+print(result)
+
+print(loadPatternData(file))
 
 file.close()
