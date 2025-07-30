@@ -8,7 +8,7 @@ ByteOrder = Literal["little", "big"]
 ENDIANNESS: ByteOrder = "little"
 MAX_SAMPLE_COUNT = 31
 CHANNEL_COUNT = 4
-MAX_NOTE_COUNT = 31
+MAX_ROW_COUNT = 64
 
 # addresses:
 SONGNAME_OFFSET = 0x0000
@@ -28,6 +28,7 @@ SONGPOS_LEN = 128
 MAGIC_OFFSET = 0x0438
 # ----
 PATTERNS_OFFSET = 0x043C
+PATTERN_SIZE = 1024
 NOTE_SIZE = 4
 
 # data types:
@@ -48,7 +49,7 @@ class Note:     # holds a note
     effect      : int
 
 @dataclass
-class Pattern:  # holds a pattern with 4 channels with 31 notes each
+class Pattern:  # holds a pattern with 4 channels with 64 notes each
     ch1: list[Note] = field(default_factory=list)
     ch2: list[Note] = field(default_factory=list)
     ch3: list[Note] = field(default_factory=list)
@@ -130,19 +131,22 @@ def getMagicInfo(f: BufferedReader) -> str:
     data = readBlock(f, MAGIC_OFFSET, 4)
     return toString(data)
 
+def getChannel(f: BufferedReader, pattern_no:int, channel_no: int) -> list[Note]:
+    notelist = []
+    for note_idx in range(MAX_ROW_COUNT):
+        note_addr = PATTERNS_OFFSET + note_idx*NOTE_SIZE + channel_no*NOTE_SIZE + pattern_no*PATTERN_SIZE
+        note_data = readBlock(f, note_addr , 4)
+        idx, period, effect = extractNoteInfo(note_data)
+        notelist.append(Note(idx, period, effect))
+    return notelist
+
 def loadPatternData(f: BufferedReader) -> list[Pattern]:
     num_patterns = max(loadSongPositions(f))    
     pattern_array = []
-    for i in range(num_patterns):
+    for pattern_idx in range(num_patterns):
         pattern = Pattern()
         for channel_idx in range(CHANNEL_COUNT):
-            notelist = []
-            for note_idx in range(MAX_NOTE_COUNT):
-                note_addr = PATTERNS_OFFSET + note_idx*NOTE_SIZE + channel_idx*NOTE_SIZE
-                note_data = readBlock(f, note_addr , 4)
-                idx, period, effect = extractNoteInfo(note_data)
-                notelist.append(Note(idx, period, effect))
-            pattern[channel_idx] = notelist
+            pattern[channel_idx] = getChannel(f, pattern_idx, channel_idx)
         pattern_array.append(pattern)
     return pattern_array
 
