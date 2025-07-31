@@ -22,8 +22,8 @@ SONGLENGTH_OFFSET = 0x03B6
 # ----
 SEARCHUNTIL_OFFSET = 0x03B7
 # ----
-SONGPOS_OFFSET = 0x3B8
-SONGPOS_LEN = 128
+PATTERNPOS_OFFSET = 0x3B8
+PATTERNPOS_LEN = 128
 # ----
 MAGIC_OFFSET = 0x0438
 # ----
@@ -85,10 +85,10 @@ def extractBits(data: bytes, start: int, end: int) -> int:
     return -1
 
 def extractNoteInfo(data: bytes) -> tuple[int, int, int]:
-    idx = (extractBits(data, 0, 3) << 4) + extractBits(data, 15, 19)
+    sample = (extractBits(data, 0, 3) << 4) + extractBits(data, 15, 19)
     period = extractBits(data, 4, 15)
     effect = extractBits(data, 20, 31)
-    return idx, period, effect
+    return sample, period, effect
 
 # ---- data structure operations
 
@@ -123,8 +123,8 @@ def getSearchUntilInfo(f: BufferedReader) -> int:
     return toInt(data)
 
 # 128 positions that tell the tracker what pattern (0-63) to play at that position (0-127)
-def loadSongPositions(f: BufferedReader) -> list[int]:
-    data = readBlock(f, SONGPOS_OFFSET, SONGPOS_LEN)
+def loadPatternPositions(f: BufferedReader) -> list[int]:
+    data = readBlock(f, PATTERNPOS_OFFSET, PATTERNPOS_LEN)
     return list(data)
 
 def getMagicInfo(f: BufferedReader) -> str:
@@ -134,14 +134,14 @@ def getMagicInfo(f: BufferedReader) -> str:
 def getChannel(f: BufferedReader, pattern_no:int, channel_no: int) -> list[Note]:
     notelist = []
     for note_idx in range(MAX_ROW_COUNT):
-        note_addr = PATTERNS_OFFSET + note_idx*NOTE_SIZE + channel_no*NOTE_SIZE + pattern_no*PATTERN_SIZE
+        note_addr = PATTERNS_OFFSET + pattern_no*PATTERN_SIZE + channel_no*NOTE_SIZE + note_idx*(NOTE_SIZE*4)
         note_data = readBlock(f, note_addr , 4)
-        idx, period, effect = extractNoteInfo(note_data)
-        notelist.append(Note(idx, period, effect))
+        sample, period, effect = extractNoteInfo(note_data)
+        notelist.append(Note(sample, period, effect))
     return notelist
 
 def loadPatternData(f: BufferedReader) -> list[Pattern]:
-    num_patterns = max(loadSongPositions(f))    
+    num_patterns = max(loadPatternPositions(f)) + 1
     pattern_array = []
     for pattern_idx in range(num_patterns):
         pattern = Pattern()
@@ -152,15 +152,14 @@ def loadPatternData(f: BufferedReader) -> list[Pattern]:
 
 # -----------------
 # testing:
-file = open("examples/70hz_refresh_chip.mod", "rb")
+file = open("examples/remonitor.mod", "rb")
 if (not file.readable()):
     print("File couldn't be read")
     quit()
 
-data = b'\x01\xac\x3f\x08'
-result = extractBits(data, 16, 19)
-print(result)
-
-print(loadPatternData(file))
+pattern_data = loadPatternData(file)
+pattern = pattern_data[4]
+for i in range(16):
+    print(pattern.ch1[i])
 
 file.close()
