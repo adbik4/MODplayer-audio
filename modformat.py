@@ -1,11 +1,7 @@
-from typing import Literal
 from dataclasses import dataclass, fields, field, astuple
 from io import BufferedReader
 
-ByteOrder = Literal["little", "big"]
-
 # constants:
-ENDIANNESS: ByteOrder = "little"
 MAX_SAMPLE_COUNT = 31
 CHANNEL_COUNT = 4
 MAX_ROW_COUNT = 64
@@ -50,14 +46,16 @@ class Note:     # holds a note
 
 @dataclass
 class Pattern:  # holds a pattern with 4 channels with 64 notes each
-    ch1: list[Note] = field(default_factory=list)
-    ch2: list[Note] = field(default_factory=list)
-    ch3: list[Note] = field(default_factory=list)
-    ch4: list[Note] = field(default_factory=list)
+    ch1: list[Note] = field(default_factory=list)   # channel 1
+    ch2: list[Note] = field(default_factory=list)   # channel 2
+    ch3: list[Note] = field(default_factory=list)   # channel 3
+    ch4: list[Note] = field(default_factory=list)   # channel 4
     
+    # indexing support
     def __getitem__(self, index):
         return astuple(self)[index]
 
+    # indexing support
     def __setitem__(self, index, value):
         field_name = fields(self)[index].name
         setattr(self, field_name, value)
@@ -67,23 +65,29 @@ class Pattern:  # holds a pattern with 4 channels with 64 notes each
 def toString(data: bytes) -> str:
     return data.translate(None, b'\0').decode("CP437")
 
-def toInt(data:bytes) -> int:
-    return int.from_bytes(data, ENDIANNESS)
+def toInt_LE(data:bytes) -> int:
+    return int.from_bytes(data, "little")
+
+def toInt_BE(data:bytes) -> int:
+    return int.from_bytes(data, "big")
 
 def readBlock(f: BufferedReader, offset: int, length: int) -> bytes:
     f.seek(offset)
     return f.read(length)
 
 # ---- data processing
+
+# extract a smaller sequence of bits from a bytes object. Returns an int
 def extractBits(data: bytes, start: int, end: int) -> int:
     wordlen = len(data) * 8
     if (start < wordlen and start >= 0) and (end < wordlen and end >= 0) and (start <= end):
-        value = int.from_bytes(data, byteorder='big')
+        value = toInt_BE(data)
         shifted = value >> (wordlen - end - 1)
         result = shifted & (2**(end - start + 1) - 1)
         return result
     return -1
 
+# unpacks raw note data
 def extractNoteInfo(data: bytes) -> tuple[int, int, int]:
     sample = (extractBits(data, 0, 3) << 4) + extractBits(data, 15, 19)
     period = extractBits(data, 4, 15)
@@ -98,16 +102,16 @@ def getSongNameInfo(f: BufferedReader) -> str:
     return toString(data)
 
 # information about the samples
-def loadSamplesInfo(f: BufferedReader) -> list[Sample]:
+def loadSampleInfo(f: BufferedReader) -> list[Sample]:
     sample_array = []
     for i in range(MAX_SAMPLE_COUNT):
         f.seek(SAMPLEARR_OFFSET + SAMPLEBLOCK_SIZE*i)
         name = toString(f.read(SAMPLENAME_LEN))
-        length = toInt(f.read(2)) * 2
+        length = toInt_BE(f.read(2)) * 2
         finetune = extractBits(f.read(1), 0, 3) 
-        volume = toInt(f.read(1)) 
-        repeatpoint = toInt(f.read(2)) * 2
-        looplen = toInt(f.read(2)) * 2
+        volume = toInt_LE(f.read(1)) 
+        repeatpoint = toInt_LE(f.read(2)) * 2
+        looplen = toInt_LE(f.read(2)) * 2
 
         sample_array.append(Sample(name, length, finetune, volume, repeatpoint, looplen))
     return sample_array
@@ -115,12 +119,12 @@ def loadSamplesInfo(f: BufferedReader) -> list[Sample]:
 # length of the song
 def getSongLengthInfo(f: BufferedReader) -> int:
     data = readBlock(f, SONGLENGTH_OFFSET, 1)
-    return toInt(data)
+    return toInt_LE(data)
 
 # noisetracker uses this byte for restart before the end of file
 def getSearchUntilInfo(f: BufferedReader) -> int:
     data = readBlock(f, SEARCHUNTIL_OFFSET, 1)
-    return toInt(data)
+    return toInt_LE(data)
 
 # 128 positions that tell the tracker what pattern (0-63) to play at that position (0-127)
 def loadPatternPositions(f: BufferedReader) -> list[int]:
@@ -134,14 +138,17 @@ def getMagicInfo(f: BufferedReader) -> str:
 def getChannel(f: BufferedReader, pattern_no:int, channel_no: int) -> list[Note]:
     notelist = []
     for note_idx in range(MAX_ROW_COUNT):
-        note_addr = PATTERNS_OFFSET + pattern_no*PATTERN_SIZE + channel_no*NOTE_SIZE + note_idx*(NOTE_SIZE*4)
+        base_addr = PATTERNS_OFFSET + pattern_no*PATTERN_SIZE + channel_no*NOTE_SIZE
+        note_addr = base_addr + note_idx*(NOTE_SIZE*4)
         note_data = readBlock(f, note_addr , 4)
+        
         sample, period, effect = extractNoteInfo(note_data)
         notelist.append(Note(sample, period, effect))
+        
     return notelist
 
 def loadPatternData(f: BufferedReader) -> list[Pattern]:
-    num_patterns = max(loadPatternPositions(f)) + 1
+    num_patterns = max(loadPatternPositions(f)) + 1     # REPLACE WITH ATTRIBUTE LATER
     pattern_array = []
     for pattern_idx in range(num_patterns):
         pattern = Pattern()
@@ -150,6 +157,20 @@ def loadPatternData(f: BufferedReader) -> list[Pattern]:
         pattern_array.append(pattern)
     return pattern_array
 
+def loadSampleData(f: BufferedReader) -> list[Sample]:
+    sample_array = loadSampleInfo(f)
+    num_patterns = max(loadPatternPositions(f)) + 1     # REPLACE WITH ATTRIBUTE LATER
+    
+    offset = 0
+    sample_count = len(sample_array)
+    for i in range(sample_count):
+        sample = sample_array[i]
+        base_addr = PATTERNS_OFFSET + num_patterns*PATTERN_SIZE
+        address = base_addr + offset
+        sample.data = list(readBlock(f, address, sample.length))
+        offset += sample.length
+    return sample_array
+
 # -----------------
 # testing:
 file = open("examples/remonitor.mod", "rb")
@@ -157,9 +178,6 @@ if (not file.readable()):
     print("File couldn't be read")
     quit()
 
-pattern_data = loadPatternData(file)
-pattern = pattern_data[4]
-for i in range(16):
-    print(pattern.ch1[i])
+print(loadSampleData(file))
 
 file.close()
