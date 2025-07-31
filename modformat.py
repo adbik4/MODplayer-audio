@@ -68,9 +68,20 @@ class Song :    # holds all of the information from a .MOD file
     name            : str   # name of the song
     samplelist      : list[Sample]  # list of all the sample recordings
     length          : int   # length of the song in patterns
-    search_until    : int   # pattern index where the tracker should loop
+    repeat_idx    : int   # pattern index where the tracker should loop
     pattern_order   : list[int] # order in which the patterns will be played
     patternlist     : list[Pattern] # list of all the patterns (4 channels each)
+    
+    def __str__(self):
+        output = "---- SONG INFO ----\n"
+        output += "Name: "+ self.name + "\n"
+        output += "Sample list:\n"
+        for sample in self.samplelist:
+            output+= "\t" + ("[null]" if sample.name == '' else sample.name) + "\n"
+        output += "Length: "+ str(self.length) + "\n"
+        output += "Repeat index: "+ str(self.repeat_idx) + "\n"
+        output += "Pattern order: "+ str(self.pattern_order) + "\n"
+        return output
     
 # ---- the loader class:    
 
@@ -83,7 +94,10 @@ class Loader:
             print("File couldn't be read")
             quit()
             
-        self._pattern_count = 0     # reset after potentially the previous file
+        # reset after the previous file probably changed it
+        self._pattern_count = 0    
+        self._song_length = 0
+        # ----
         
         magic = self.__readMagic(f)
         if (magic == "\0\0\0\0"):
@@ -98,12 +112,12 @@ class Loader:
         name = self.__readSongName(f)
         samplelist = self.__loadSampleData(f)
         length = self.__readSongLength(f)
-        search_until = self.__readSearchUntil(f)
+        repeat_idx = self.__readSearchUntil(f)
         pattern_order = self.__loadPatternPositions(f)
         patternlist = self.__loadPatternData(f)
-        
+
         f.close()
-        return Song(name, samplelist, length, search_until, pattern_order, patternlist)
+        return Song(name, samplelist, length, repeat_idx, pattern_order, patternlist)
         
     # private methods:
     # ---- file operations
@@ -165,13 +179,12 @@ class Loader:
     # the actual sample recordings
     def __loadSampleData(self, f: BufferedReader) -> list[Sample]:
         sample_array = self.__loadSampleInfo(f)
-        num_patterns = max(self.__loadPatternPositions(f)) + 1     # REPLACE WITH ATTRIBUTE LATER
         
         offset = 0
         sample_count = len(sample_array)
         for i in range(sample_count):
             sample = sample_array[i]
-            base_addr = PATTERNS_OFFSET + num_patterns*PATTERN_SIZE
+            base_addr = PATTERNS_OFFSET + self._pattern_count*PATTERN_SIZE
             address = base_addr + offset
             sample.data = list(self.__readBlock(f, address, sample.length))
             offset += sample.length
@@ -180,7 +193,8 @@ class Loader:
     # length of the song
     def __readSongLength(self, f: BufferedReader) -> int:
         data = self.__readBlock(f, SONGLENGTH_OFFSET, 1)
-        return self.__toInt_LE(data)
+        self._song_length = self.__toInt_LE(data)
+        return self._song_length
 
     # noisetracker uses this byte for restart before the end of file
     def __readSearchUntil(self, f: BufferedReader) -> int:
@@ -189,7 +203,7 @@ class Loader:
 
     # 128 positions that tell the tracker what pattern (0-63) to play at that position (0-127)
     def __loadPatternPositions(self, f: BufferedReader) -> list[int]:
-        data = list(self.__readBlock(f, PATTERNPOS_OFFSET, PATTERNPOS_LEN))
+        data = list(self.__readBlock(f, PATTERNPOS_OFFSET, PATTERNPOS_LEN))[0:self._song_length]
         self.pattern_count = max(data) + 1    # save for later
         return data
     
