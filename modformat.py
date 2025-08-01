@@ -1,9 +1,9 @@
-from dataclasses import dataclass, fields, field, astuple
 from __future__ import annotations
+from dataclasses import dataclass, fields, field, astuple
 from io import BufferedReader
-import numpy as np
 
 # constants:
+MAGIC_IDS= ['M.K','4CHN','6CHN','8CHN','FLT4','FLT8']
 CHANNEL_COUNT = 4
 MAX_ROW_COUNT = 64
 
@@ -109,21 +109,17 @@ class ModParser:
         # ----
         
         magic = self._readMagic(f)
-        if (magic == "\0\0\0\0"):
-            self.max_sample_count = 15
-        elif (magic == "M.K."):
+        if (magic in MAGIC_IDS):
             self.max_sample_count = 31
-        elif (magic == "FLT4" or magic == "FLT8"):
-            self.max_sample_count = 64
         else:
-            self.max_sample_count = 128
+            self.max_sample_count = 15
             
         name = self._readSongName(f)
-        samplelist = self._loadSampleData(f)
         length = self._readSongLength(f)
         repeat_idx = self._readSearchUntil(f)
         pattern_order = self._loadPatternPositions(f)
         patternlist = self._loadPatternData(f)
+        samplelist = self._loadSampleData(f)
 
         f.close()
         return ModFile(name, samplelist, length, repeat_idx, pattern_order, patternlist)
@@ -182,9 +178,9 @@ class ModParser:
             name = self._toString(f.read(SAMPLENAME_LEN))
             length = self._toInt_BE(f.read(2)) * 2
             finetune = self._extractBits(f.read(1), 0, 3) 
-            volume = self._toInt_LE(f.read(1)) 
-            repeatpoint = self._toInt_LE(f.read(2)) * 2
-            looplen = self._toInt_LE(f.read(2)) * 2
+            volume = self._toInt_BE(f.read(1)) 
+            repeatpoint = self._toInt_BE(f.read(2)) * 2
+            looplen = self._toInt_BE(f.read(2)) * 2
 
             sample_array.append(Sample(name, length, finetune, volume, repeatpoint, looplen))
         return sample_array
@@ -200,32 +196,35 @@ class ModParser:
             base_addr = PATTERNS_OFFSET + self._pattern_count*PATTERN_SIZE
             address = base_addr + offset
             raw_bytes = self._readBlock(f, address, sample.length)
-            sample.data = np.frombuffer(raw_bytes, dtype=np.uint8).astype(np.uint8)[::4].tolist()  # little-endian int16
+            for value_idx in range(sample.length):
+                # big endian 8 bit signed int
+                sample.data.append(int.from_bytes(raw_bytes[value_idx:value_idx+1], byteorder='big', signed=True))
             offset += sample.length
         return sample_array
 
     # length of the song
     def _readSongLength(self, f: BufferedReader) -> int:
         data = self._readBlock(f, SONGLENGTH_OFFSET, 1)
-        self._song_length = self._toInt_LE(data)
+        self._song_length = self._toInt_BE(data)
         return self._song_length
 
     # noisetracker uses this byte for restart before the end of file
     def _readSearchUntil(self, f: BufferedReader) -> int:
         data = self._readBlock(f, SEARCHUNTIL_OFFSET, 1)
-        return self._toInt_LE(data)
+        return self._toInt_BE(data)
 
     # 128 positions that tell the tracker what pattern (0-63) to play at that position (0-127)
+    # CALL BEFORE loadPatternData() and loadSampleData()
     def _loadPatternPositions(self, f: BufferedReader) -> list[int]:
         data = list(self._readBlock(f, PATTERNPOS_OFFSET, PATTERNPOS_LEN))[0:self._song_length]
-        self.pattern_count = max(data) + 1    # save for later
+        self._pattern_count = max(data) + 1    # save for later
         return data
     
     # the actual note layout and rythm information
     # CALL loadPatternPositions() FIRST, because of pattern_count
     def _loadPatternData(self, f: BufferedReader) -> list[Pattern]:
         pattern_array = []
-        for pattern_idx in range(self.pattern_count):
+        for pattern_idx in range(self._pattern_count):
             pattern = Pattern()
             for channel_idx in range(CHANNEL_COUNT):
                 pattern[channel_idx] = self._readChannel(f, pattern_idx, channel_idx)
@@ -242,7 +241,7 @@ class ModParser:
         notelist = []
         for note_idx in range(MAX_ROW_COUNT):
             base_addr = PATTERNS_OFFSET + pattern_no*PATTERN_SIZE + channel_no*NOTE_SIZE
-            note_addr = base_addr + note_idx*(NOTE_SIZE*4)
+            note_addr = base_addr + note_idx*NOTE_SIZE*CHANNEL_COUNT
             note_data = self._readBlock(f, note_addr , 4)
             
             sample, period, effect = self._extractNoteInfo(note_data)

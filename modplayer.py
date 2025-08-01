@@ -8,11 +8,10 @@ filepath = "examples/the_objttze.mod"
 
 # Initialize pyAudio
 p = pyaudio.PyAudio()
-stream = p.open(format=pyaudio.paUInt8, channels=1, rate=8287, input=False, output=True)
+stream = p.open(format=pyaudio.paUInt8, channels=1, rate=8000, input=False, output=True)
 
 # Load song
-loader = modformat.Loader()
-song = loader.loadSong(filepath)
+song = modformat.ModFile.open(filepath)
 print(song)
 
 # Play all of its samples
