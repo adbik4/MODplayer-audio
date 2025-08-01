@@ -1,25 +1,44 @@
 import pyaudio
-import time
 import numpy as np
-import modformat
+from modformat import ModFile
+import time
+import threading
 
-CHUNK = 1024
-filepath = "examples/remonitor.mod"
+FILEPATH = "examples/remonitor.mod"
+BPM = 125
+TPB = 6
+TICK_RATE = 60 / (BPM * TPB)
+SAMPLE_RATE = 16574
+PLAYBACK_RATE = 48000
 
-# Initialize pyAudio
-p = pyaudio.PyAudio()
-stream = p.open(format=pyaudio.paInt8, channels=1, rate=16574, input=False, output=True)
+def clock(tick_event):
+    next_tick = time.perf_counter() + TICK_RATE
+    while True:
+        now = time.perf_counter()
+        time.sleep(max(0, next_tick - now))
+        tick_event.set()
+        tick_event.clear()
+        next_tick += TICK_RATE
 
-# Load song
-song = modformat.ModFile.open(filepath)
-print(song)
+def main():
+    # Initialize threads
+    tick_event = threading.Event()
+    clock_thread = threading.Thread(target=clock, args=(tick_event,), daemon=True)
 
-# Play all of its samples
-for sample in song.samplelist:
-    audio_data = sample.data
-    stream.write(bytes(audio_data))
+    # Initialize pyAudio
+    p = pyaudio.PyAudio()
+    stream = p.open(format=pyaudio.paInt8, channels=1, rate=PLAYBACK_RATE, input=False, output=True)
+    
+    # Load song
+    song = ModFile.open(FILEPATH)
 
-# Close the stream and terminate pyAudio
-stream.stop_stream()
-stream.close()
-p.terminate()
+    # start clock
+    clock_thread.run()
+    
+    # Close the stream and terminate pyAudio
+    stream.stop_stream()
+    stream.close()
+    p.terminate()
+
+if __name__ == "__main__":
+    main()
