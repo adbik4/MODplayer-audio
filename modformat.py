@@ -195,10 +195,7 @@ class ModParser:
             sample = sample_array[i]
             base_addr = PATTERNS_OFFSET + self._pattern_count*PATTERN_SIZE
             address = base_addr + offset
-            raw_bytes = self._readBlock(f, address, sample.length)
-            for value_idx in range(sample.length):
-                # big endian 8 bit signed int
-                sample.data.append(int.from_bytes(raw_bytes[value_idx:value_idx+1], byteorder='big', signed=True))
+            sample.data = list(self._readBlock(f, address, sample.length))
             offset += sample.length
         return sample_array
 

@@ -4,11 +4,11 @@ import numpy as np
 import modformat
 
 CHUNK = 1024
-filepath = "examples/the_objttze.mod"
+filepath = "examples/remonitor.mod"
 
 # Initialize pyAudio
 p = pyaudio.PyAudio()
-stream = p.open(format=pyaudio.paUInt8, channels=1, rate=8000, input=False, output=True)
+stream = p.open(format=pyaudio.paInt8, channels=1, rate=16574, input=False, output=True)
 
 # Load song
 song = modformat.ModFile.open(filepath)
@@ -16,8 +16,8 @@ print(song)
 
 # Play all of its samples
 for sample in song.samplelist:
-    audio_data = np.array(sample.data).view(np.int8)[::4]
-    stream.write(audio_data.tobytes())
+    audio_data = sample.data
+    stream.write(bytes(audio_data))
 
 # Close the stream and terminate pyAudio
 stream.stop_stream()
