@@ -1,6 +1,5 @@
-from modformat import Loader
+from modformat import ModFile
 filepath = "examples/70hz_refresh_chip.mod"
 
-loader = Loader()
-song = loader.loadSong(filepath)
+song = ModFile.open(filepath)
 print(song)

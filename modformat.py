@@ -1,5 +1,7 @@
 from dataclasses import dataclass, fields, field, astuple
+from __future__ import annotations
 from io import BufferedReader
+import numpy as np
 
 # constants:
 CHANNEL_COUNT = 4
@@ -64,13 +66,18 @@ class Pattern:  # holds a pattern with 4 channels with 64 notes each
 # ---- the song type:
 
 @dataclass (frozen=True)
-class Song :    # holds all of the information from a .MOD file
+class ModFile :    # holds all of the information from a .MOD file
     name            : str   # name of the song
     samplelist      : list[Sample]  # list of all the sample recordings
     length          : int   # length of the song in patterns
     repeat_idx    : int   # pattern index where the tracker should loop
     pattern_order   : list[int] # order in which the patterns will be played
     patternlist     : list[Pattern] # list of all the patterns (4 channels each)
+    
+    @staticmethod
+    def open(filepath: str) -> ModFile:
+        parser = ModParser()
+        return parser.parse(filepath)
     
     def __str__(self):
         output = "---- SONG INFO ----\n"
@@ -86,11 +93,11 @@ class Song :    # holds all of the information from a .MOD file
 # ---- the loader class:    
 
 # an object which can read a given .MOD file
-class Loader:
-    __all__ = ["loadSong"]
+class ModParser:
+    __all__ = ["parse"]
     
     # public method
-    def loadSong(self, filepath: str):
+    def parse(self, filepath: str) -> ModFile:
         f = open(filepath, "rb")
         if (not f.readable()):
             print("File couldn't be read")
@@ -119,20 +126,24 @@ class Loader:
         patternlist = self._loadPatternData(f)
 
         f.close()
-        return Song(name, samplelist, length, repeat_idx, pattern_order, patternlist)
+        return ModFile(name, samplelist, length, repeat_idx, pattern_order, patternlist)
         
     # private methods:
     # ---- file operations
-    def _toString(self, data: bytes) -> str:
+    @staticmethod
+    def _toString(data: bytes) -> str:
         return data.translate(None, b'\0').decode("CP437")
 
-    def _toInt_LE(self, data:bytes) -> int:
+    @staticmethod
+    def _toInt_LE(data:bytes) -> int:
         return int.from_bytes(data, "little")
 
-    def _toInt_BE(self, data:bytes) -> int:
+    @staticmethod
+    def _toInt_BE(data:bytes) -> int:
         return int.from_bytes(data, "big")
 
-    def _readBlock(self, f: BufferedReader, offset: int, length: int) -> bytes:
+    @staticmethod
+    def _readBlock(f: BufferedReader, offset: int, length: int) -> bytes:
         f.seek(offset)
         return f.read(length)
 
@@ -188,7 +199,8 @@ class Loader:
             sample = sample_array[i]
             base_addr = PATTERNS_OFFSET + self._pattern_count*PATTERN_SIZE
             address = base_addr + offset
-            sample.data = list(self._readBlock(f, address, sample.length))
+            raw_bytes = self._readBlock(f, address, sample.length)
+            sample.data = np.frombuffer(raw_bytes, dtype=np.uint8).astype(np.uint8)[::4].tolist()  # little-endian int16
             offset += sample.length
         return sample_array
 
