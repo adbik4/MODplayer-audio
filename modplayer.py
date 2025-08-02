@@ -1,6 +1,7 @@
 import pyaudio
 import threading
 
+import numpy as np
 from settings import *
 from managers import *
 from modformat import ModFile
@@ -14,14 +15,20 @@ def main():
     song = ModFile.open(FILEPATH)
     
     # Initialize and start the clock
-    tick_event = threading.Event()
-    clk_state = ClockState(length=song.length, repeat_idx=song.repeat_idx)
-    threading.Thread(target=clock, args=(tick_event, clk_state), daemon=True).start()
+    clk_state = ClockState(tick_event = threading.Event(),
+                           length = song.length,
+                           repeat_idx = song.repeat_idx)
+    threading.Thread(target=clock, args=(clk_state), daemon=True).start()
+    
+    # Prepare the channels output buffer
+    buffer_size = TICK_RATE * PLAYBACK_RATE
+    channel_buffer = np.zeros((4, buffer_size), dtype=np.int8)
+    ready_flags = [threading.Event() for _ in range(4)]
     
     # Start the channel threads and store them
     channel_threads = []
     for i in range(1):
-        t = threading.Thread(target=channel, args=(i, clk_state, song))
+        t = threading.Thread(target=channel, args=(i, clk_state, song, channel_buffer, ready_flags))
         t.start()
         channel_threads.append(t)
 

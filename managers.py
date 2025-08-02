@@ -1,11 +1,12 @@
-from dataclasses import dataclass
-from settings import *
 import time
+from settings import *
+from threading import Event
+from dataclasses import dataclass
+from audioprocessing import render
 
 # ---- constants
 
 TICK_RATE = 60 / (BPM * TPB)
-SAMPLE_RATE = 16574
 MAX_NOTE_COUNT = 64
 
 # ---- data types
@@ -14,29 +15,30 @@ MAX_NOTE_COUNT = 64
 # are always perfectly synchronised and can resume from any moment in the song
 @dataclass
 class ClockState:
+    tick_event : Event
     length : int = 127
     repeat_idx : int = 127
-    
-    pattern_id : int = 0
-    note_id : int = 0
+
+    pattern_idx : int = 0
+    note_idx : int = 0
     
     # Modulo and looping logic
     def __setattr__(self, key, value):
-        if key == "note_id":
+        if key == "note_idx":
             if value < MAX_NOTE_COUNT:
-                super().__setattr__("note_id", value)
+                super().__setattr__("note_idx", value)
             else:
-                super().__setattr__("note_id", 0)
-                self.__setattr__("pattern_id", self.pattern_id + 1)
-        elif key == "pattern_id":
+                super().__setattr__("note_idx", 0)
+                self.__setattr__("pattern_idx", self.pattern_id + 1)
+        elif key == "pattern_idx":
             new_value = value if (value < self.length and value < self.repeat_idx) else 0
-            super().__setattr__("pattern_id", new_value)
+            super().__setattr__("pattern_idx", new_value)
         else:
             super().__setattr__(key, value)
             
 # ---- thread definitions
 
-def clock(tick_event, clk_state):
+def clock(clk_state):
     next_tick = time.perf_counter() + TICK_RATE
     while True:
         # Correct for any delay and wait
@@ -44,14 +46,24 @@ def clock(tick_event, clk_state):
         time.sleep(max(0, next_tick - now))
         
         # Broadcast tick event
-        tick_event.set()
-        tick_event.clear()
+        clk_state.tick_event.set()
+        clk_state.tick_event.clear()
         
         # Update clock state
-        clk_state.note_id += 1
+        clk_state.note_idx += 1
         next_tick += TICK_RATE
         
         
-def channel(channel_no, clk_state, song):
+def channel(channel_no, clk_state, song, channel_buffer, ready_flags):
     print("hello from channel", channel_no)
-    time.sleep(5)
+    
+    while shouldPlay:
+        # Unpack the current pattern
+        pattern = song.patternlist[song.pattern_order[clk_state.pattern_idx]]
+        
+        # pass the note to the mixer
+        channel_buffer[channel_no] = render(pattern[channel_no][clk_state.note_idx], song.samplelist)
+        ready_flags[channel_no].set()
+        
+        # Wait for the next tick
+        clk_state.tick_event.wait()
