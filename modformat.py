@@ -57,7 +57,8 @@ class Pattern:  # holds a pattern with 4 channels with 64 notes each
     
     # indexing support
     def __getitem__(self, index):
-        return astuple(self)[index]
+        field_names = [f.name for f in fields(self)]
+        return getattr(self, field_names[index])
 
     # indexing support
     def __setitem__(self, index, value):

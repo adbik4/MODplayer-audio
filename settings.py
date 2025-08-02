@@ -1,6 +1,4 @@
-FILEPATH = "examples/remonitor.mod"
+FILEPATH = "examples/the_objttze.mod"
 PLAYBACK_RATE = 48000
-BPM = 600
+BPM = 60
 TPB = 6
-
-shouldPlay = True

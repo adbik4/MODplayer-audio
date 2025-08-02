@@ -21,6 +21,7 @@ class ClockState:
 
     pattern_idx : int = 0
     note_idx : int = 0
+    next_tick = time.perf_counter() + TICK_RATE
     
     # Modulo and looping logic
     def __setattr__(self, key, value):
@@ -29,7 +30,7 @@ class ClockState:
                 super().__setattr__("note_idx", value)
             else:
                 super().__setattr__("note_idx", 0)
-                self.__setattr__("pattern_idx", self.pattern_id + 1)
+                self.__setattr__("pattern_idx", self.pattern_idx + 1)
         elif key == "pattern_idx":
             new_value = value if (value < self.length and value < self.repeat_idx) else 0
             super().__setattr__("pattern_idx", new_value)
@@ -38,12 +39,11 @@ class ClockState:
             
 # ---- thread definitions
 
-def clock(clk_state):
-    next_tick = time.perf_counter() + TICK_RATE
-    while True:
+def clock(clk_state, stop_flag):
+    while not stop_flag.is_set():
         # Correct for any delay and wait
         now = time.perf_counter()
-        time.sleep(max(0, next_tick - now))
+        time.sleep(max(0, clk_state.next_tick - now))
         
         # Broadcast tick event
         clk_state.tick_event.set()
@@ -51,13 +51,13 @@ def clock(clk_state):
         
         # Update clock state
         clk_state.note_idx += 1
-        next_tick += TICK_RATE
+        clk_state.next_tick += TICK_RATE
         
         
-def channel(channel_no, clk_state, song, channel_buffer, ready_flags):
+def channel(channel_no, clk_state, song, channel_buffer, ready_flags, stop_flag):
     print("hello from channel", channel_no)
     
-    while shouldPlay:
+    while not stop_flag.is_set():
         # Unpack the current pattern
         pattern = song.patternlist[song.pattern_order[clk_state.pattern_idx]]
         
