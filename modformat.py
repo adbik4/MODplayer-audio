@@ -5,7 +5,7 @@ from io import BufferedReader
 # constants:
 MAGIC_IDS= ['M.K','4CHN','6CHN','8CHN','FLT4','FLT8']
 CHANNEL_COUNT = 4
-MAX_ROW_COUNT = 64
+MAX_NOTE_COUNT = 64
 
 # addresses:
 SONGNAME_OFFSET = 0x0000
@@ -236,7 +236,7 @@ class ModParser:
     # reads a given channel (0-3) of a given pattern
     def _readChannel(self, f: BufferedReader, pattern_no:int, channel_no: int) -> list[Note]:
         notelist = []
-        for note_idx in range(MAX_ROW_COUNT):
+        for note_idx in range(MAX_NOTE_COUNT):
             base_addr = PATTERNS_OFFSET + pattern_no*PATTERN_SIZE + channel_no*NOTE_SIZE
             note_addr = base_addr + note_idx*NOTE_SIZE*CHANNEL_COUNT
             note_data = self._readBlock(f, note_addr , 4)
