@@ -35,7 +35,7 @@ def main():
     # Start the mixer
     output_buffer = np.zeros(BUFFER_SIZE, dtype=np.int8)
     output_flag = threading.Event() # signals to the player when it finishes writing
-    mixer_thread = threading.Thread(target=mixer, args=(channel_buffer, output_buffer, channel_flags, output_flag, stop_flag))
+    mixer_thread = threading.Thread(target=mixer, args=(channel_buffer, output_buffer, channel_flags, clk_state, output_flag, stop_flag))
     mixer_thread.start()
     
     # Start the player

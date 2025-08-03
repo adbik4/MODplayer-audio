@@ -110,7 +110,8 @@ class ModParser:
         self._song_length = 0
         # ----
         
-        # hardcoding because there are to many variants out there to cover
+        # hardcoding because there are way too many variants out there to cover
+        # for negligible memory savings
         self.max_sample_count = 64
             
         name = self._readSongName(f)

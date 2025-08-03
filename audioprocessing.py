@@ -32,7 +32,7 @@ def apply_effect(data: NDArray[np.int8], effect_id: int) -> NDArray[np.int8]:
 
 # ---- the note renderer
 
-def render(note: Note, samplelist: list[Sample]) -> NDArray[np.int8]:
+def render_frame(note: Note, samplelist: list[Sample]) -> NDArray[np.int8]:
     print(note)
     
     # Get the corresponding sample
