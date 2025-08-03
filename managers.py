@@ -1,8 +1,11 @@
 import time
+import pyaudio
 from settings import *
 from threading import Event
 from dataclasses import dataclass
 from audioprocessing import render
+import numpy as np
+from numpy.typing import NDArray
 
 # ---- constants
 
@@ -40,7 +43,7 @@ class ClockState:
 # ---- thread definitions
 
 def clock(clk_state, stop_flag):
-    while not stop_flag.is_set():
+    while True:
         # Correct for any delay and wait
         now = time.perf_counter()
         time.sleep(max(0, clk_state.next_tick - now))
@@ -62,8 +65,27 @@ def channel(channel_no, clk_state, song, channel_buffer, ready_flags, stop_flag)
         pattern = song.patternlist[song.pattern_order[clk_state.pattern_idx]]
         
         # pass the note to the mixer
-        channel_buffer[channel_no] = render(pattern[channel_no][clk_state.note_idx], song.samplelist)
+        channel_buffer[channel_no][:] = render(pattern[channel_no][clk_state.note_idx], song.samplelist)
         ready_flags[channel_no].set()
         
         # Wait for the next tick
         clk_state.tick_event.wait()
+
+def mixer(channel_buffer, output_buffer: NDArray[np.int8], channel_flags: list[Event], output_flag: Event, stop_flag: Event):
+    # Mix channels and pass the buffer to the player
+    while not stop_flag.is_set():
+        channel_flags[0].wait()
+        print(channel_buffer[0])
+        output_buffer[:] = channel_buffer[0]
+        channel_flags[0].clear()
+        output_flag.set()
+
+
+def player(buffer: NDArray[np.int8], stream: pyaudio.Stream, output_flag: Event, stop_flag: Event):
+    # Wait for the beginning of new frame and playback the buffer
+    while not stop_flag.is_set():
+        output_flag.wait()
+        cache = buffer.tobytes()
+        output_flag.clear()
+
+        stream.write(cache)

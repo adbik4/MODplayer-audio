@@ -6,6 +6,8 @@ from settings import *
 from managers import *
 from modformat import ModFile
 
+BUFFER_SIZE = int(TICK_RATE * PLAYBACK_RATE)
+
 def main():
     # For graceful shutdown
     stop_flag = threading.Event()
@@ -19,33 +21,44 @@ def main():
     
     # Initialize and start the clock
     clk_state = ClockState(tick_event = threading.Event(),
-                           length = song.length,
-                           repeat_idx = song.repeat_idx)
+                        length = song.length,
+                        repeat_idx = song.repeat_idx)
     clock_thread = threading.Thread(target=clock, args=(clk_state, stop_flag,), daemon=True)
     clock_thread.start()
     
     # Prepare the channels output buffer
-    buffer_size = int(TICK_RATE * PLAYBACK_RATE)
-    channel_buffer = np.zeros((4, buffer_size), dtype=np.int8)
-    ready_flags = [threading.Event() for _ in range(4)]
+    channel_buffer = np.zeros((4, BUFFER_SIZE), dtype=np.int8)
+    channel_flags = [threading.Event() for _ in range(4)] # signal to the mixer when they finish writing
     
     # Start the channel threads and store them
     channel_threads = []
-    for i in range(4):
-        t = threading.Thread(target=channel, args=(i, clk_state, song, channel_buffer, ready_flags, stop_flag))
+    for i in range(1):
+        t = threading.Thread(target=channel, args=(i, clk_state, song, channel_buffer, channel_flags, stop_flag))
         t.start()
         channel_threads.append(t)
 
-    # Program exit logic
+    # Start the mixer
+    output_buffer = np.zeros(BUFFER_SIZE, dtype=np.int8)
+    output_flag = threading.Event() # signals to the player when it finishes writing
+    mixer_thread = threading.Thread(target=mixer, args=(channel_buffer, output_buffer, channel_flags, output_flag, stop_flag))
+    mixer_thread.start()
+    
+    # Start the player
+    player_thread = threading.Thread(target=player, args=(output_buffer, stream, output_flag, stop_flag))
+    player_thread.start()
+
+    # Wait until interrupt
     try:
         while True:
             time.sleep(1)
-    except KeyboardInterrupt:
+
+    except:
         print("Exiting program...")
         stop_flag.set() # tell threads to exit
         
     # Wait for all the threads to finish
-    clock_thread.join()
+    mixer_thread.join()
+    player_thread.join()
     for t in channel_threads:
         t.join()
     

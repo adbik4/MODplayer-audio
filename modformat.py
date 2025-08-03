@@ -110,11 +110,8 @@ class ModParser:
         self._song_length = 0
         # ----
         
-        magic = self._readMagic(f)
-        if (magic in MAGIC_IDS):
-            self.max_sample_count = 31
-        else:
-            self.max_sample_count = 15
+        # hardcoding because there are to many variants out there to cover
+        self.max_sample_count = 64
             
         name = self._readSongName(f)
         length = self._readSongLength(f)
