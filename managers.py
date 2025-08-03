@@ -1,55 +1,11 @@
 import time
 import pyaudio
-from settings import *
-from threading import Event
-from modformat import Note
-from dataclasses import dataclass
-from audioprocessing import render_frame
 import numpy as np
+from threading import Event
 from numpy.typing import NDArray
-
-# ---- constants
-
-TICK_RATE = 60 / (BPM * TPB)
-MAX_NOTE_COUNT = 64
-
-# ---- data types
-
-# keeps track of where the player currently is in the track so all the channels
-# are always perfectly synchronised and can resume from any moment in the song
-@dataclass
-class ClockState:
-    tick_event : Event
-    length : int = 127
-    repeat_idx : int = 127
-
-    pattern_idx : int = 0
-    note_idx : int = 0
-    next_tick = time.perf_counter() + TICK_RATE
-    
-    # Modulo and looping logic
-    def __setattr__(self, key, value):
-        if key == "note_idx":
-            if value < MAX_NOTE_COUNT:
-                super().__setattr__("note_idx", value)
-            else:
-                super().__setattr__("note_idx", 0)
-                self.__setattr__("pattern_idx", self.pattern_idx + 1)
-        elif key == "pattern_idx":
-            new_value = value if (value < self.length and value < self.repeat_idx) else 0
-            super().__setattr__("pattern_idx", new_value)
-        else:
-            super().__setattr__(key, value)
-            
-@dataclass
-class ChannelState:
-    current_note: Note = None
-    current_frame: int = 0
-    volume: int = None
-
-    def reset(self, new_note: Note):
-        self.current_note = new_note
-        self.current_frame = 0
+from settings import PLAYBACK_RATE
+from typelib import ChannelState, ClockState, TICK_RATE
+from audioprocessing import render_frame
 
 # ---- thread definitions
 

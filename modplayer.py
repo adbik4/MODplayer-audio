@@ -1,12 +1,11 @@
 import threading
 
 import numpy as np
-from settings import *
 from managers import *
+from settings import FILEPATH
 from modformat import ModFile
 from audioprocessing import interpolate
-
-BUFFER_SIZE = int(TICK_RATE * PLAYBACK_RATE)
+from typelib import ClockState, BUFFER_SIZE
 
 def main():
     # For graceful shutdown
@@ -20,6 +19,9 @@ def main():
     for sample in song.samplelist:
         hires_samplelist.append(interpolate(sample))
     song.setSampleList(hires_samplelist)
+
+    for sample in song.samplelist:
+        print(sample.name, sample.length, sample.loopstart, sample.looplength)
     
     # Initialize and start the clock
     clk_state = ClockState(tick_event = threading.Event(),

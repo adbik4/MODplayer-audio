@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from io import BufferedReader
-from dataclasses import dataclass, fields, field, astuple
+from dataclasses import dataclass, fields, field
 
 # constants:
 MAGIC_IDS= ['M.K','4CHN','6CHN','8CHN','FLT4','FLT8']
@@ -38,8 +38,8 @@ class Sample:    # holds a sample track
     length      : int   # number of samples
     finetune    : int   # finetune value for dropping or lifting the pitch
     volume      : int   # volume
-    repeatpoint : int   # no of byte offset from start of sample
-    looplen     : int   # no of samples in loop [in bytes]
+    loopstart : int   # no of byte offset from start of sample
+    looplength     : int   # no of samples in loop [in bytes]
     data        : list[int] = field(default_factory=list)  # the actual sample data, empty at first
 
 @dataclass
@@ -115,7 +115,7 @@ class ModParser:
         
         # hardcoding because there are way too many variants out there to cover
         # for negligible memory savings
-        self.max_sample_count = 64
+        self.max_sample_count = 31
             
         name = self._readSongName(f)
         length = self._readSongLength(f)
@@ -182,10 +182,10 @@ class ModParser:
             length = self._toInt_BE(f.read(2)) * 2
             finetune = self._extractBits(f.read(1), 0, 3) 
             volume = self._toInt_BE(f.read(1)) 
-            repeatpoint = self._toInt_BE(f.read(2)) * 2
-            looplen = self._toInt_BE(f.read(2)) * 2
+            loopstart = self._toInt_BE(f.read(2)) * 2
+            looplength = self._toInt_BE(f.read(2)) * 2
 
-            sample_array.append(Sample(name, length, finetune, volume, repeatpoint, looplen))
+            sample_array.append(Sample(name, length, finetune, volume, loopstart, looplength))
         return sample_array
 
     # length of the song

@@ -1,14 +1,12 @@
 import numpy as np
 from numpy.typing import NDArray
-from settings import PLAYBACK_RATE, BPM, TPB
-from modformat import Note, Sample
-from managers import ChannelState
+from settings import PLAYBACK_RATE
+from modformat import Sample
+from typelib import ChannelState, TICK_RATE, BUFFER_SIZE
 
-# ---- constants
+# ---- local constants
 
 SAMPLE_RATE = 16000
-TICK_RATE = 60 / (BPM * TPB)
-BUFFER_SIZE = int(TICK_RATE * PLAYBACK_RATE)
 
 # ---- function definitions
 
@@ -17,12 +15,13 @@ def transpose(data: NDArray[np.int8], period: int) -> NDArray[np.int8]:
 
 def interpolate(sample: Sample) -> Sample:
     # No interpolation for now
-    repeat_count = np.round(PLAYBACK_RATE / SAMPLE_RATE)
-    sample.data = np.repeat(sample.data, repeat_count) # this is the interpolation part
+    stretch_factor = np.round(PLAYBACK_RATE / SAMPLE_RATE)
+
+    sample.data = np.repeat(sample.data, stretch_factor) # this is the interpolation part
     sample.length = sample.data.size
-    sample.looplen =
-    sample.repeatpoint = 
-    return 
+    sample.loopstart *= stretch_factor
+    sample.looplength *= stretch_factor
+    return sample
 
 def extract_view(sample: Sample) -> NDArray[np.int8]:
     # if the sample should loop, loop it to the proper len
