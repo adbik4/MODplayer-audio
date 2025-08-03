@@ -4,6 +4,7 @@ import numpy as np
 from settings import *
 from managers import *
 from modformat import ModFile
+from audioprocessing import interpolate
 
 BUFFER_SIZE = int(TICK_RATE * PLAYBACK_RATE)
 
@@ -13,6 +14,12 @@ def main():
     
     # Load song
     song = ModFile.open(FILEPATH)
+
+    # upscale the samplelist
+    hires_samplelist = []
+    for sample in song.samplelist:
+        hires_samplelist.append(interpolate(sample))
+    song.setSampleList(hires_samplelist)
     
     # Initialize and start the clock
     clk_state = ClockState(tick_event = threading.Event(),

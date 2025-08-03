@@ -81,6 +81,9 @@ class ModFile :    # holds all of the information from a .MOD file
         parser = ModParser()
         return parser.parse(filepath)
     
+    def setSampleList(self, new_samplelist: list[Sample]):
+        self.samplelist = new_samplelist
+    
     def __str__(self):
         output = "---- SONG INFO ----\n"
         output += "Name: "+ self.name + "\n"

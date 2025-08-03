@@ -2,6 +2,7 @@ import time
 import pyaudio
 from settings import *
 from threading import Event
+from modformat import Note
 from dataclasses import dataclass
 from audioprocessing import render_frame
 import numpy as np
@@ -40,6 +41,16 @@ class ClockState:
         else:
             super().__setattr__(key, value)
             
+@dataclass
+class ChannelState:
+    current_note: Note = None
+    current_frame: int = 0
+    volume: int = None
+
+    def reset(self, new_note: Note):
+        self.current_note = new_note
+        self.current_frame = 0
+
 # ---- thread definitions
 
 def clock(clk_state):
@@ -57,12 +68,23 @@ def clock(clk_state):
         clk_state.next_tick += TICK_RATE        
         
 def channel(channel_no, clk_state, song, channel_buffer, ready_flags, stop_flag):
+    # Initialise the channel state
+    channel_state = ChannelState()
+
     while not stop_flag.is_set():
         # Unpack the current pattern
         pattern = song.patternlist[song.pattern_order[clk_state.pattern_idx]]
         
-        # pass the note to the mixer
-        audio_data = render_frame(pattern[channel_no][clk_state.note_idx], song.samplelist)
+        # Reset the channel_state if there was a unique note
+        new_note = pattern[channel_no][clk_state.note_idx]
+        if new_note.period != 0:
+            # Trigger new note
+            channel_state.reset(new_note)
+
+        # else: Continue playing the last note
+
+        # Render new frame according to the channel state and pass it to the mixer
+        audio_data = render_frame(channel_state, song.samplelist)
         channel_buffer[channel_no][:] = audio_data
         ready_flags[channel_no].set()
         
