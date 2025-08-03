@@ -43,6 +43,7 @@ class ChannelState:
     current_frame: int = 0
     volume: int = None
 
-    def reset(self, new_note: Note):
+    def trigger(self, new_note: Note, volume: int):
         self.current_note = new_note
         self.current_frame = 0
+        self.volume = volume

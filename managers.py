@@ -4,7 +4,7 @@ import numpy as np
 from threading import Event
 from numpy.typing import NDArray
 from settings import PLAYBACK_RATE
-from typelib import ChannelState, ClockState, TICK_RATE
+from typelib import ChannelState, ClockState, TICK_RATE, BUFFER_SIZE
 from audioprocessing import render_frame
 
 # ---- thread definitions
@@ -33,14 +33,19 @@ def channel(channel_no, clk_state, song, channel_buffer, ready_flags, stop_flag)
         
         # Reset the channel_state if there was a unique note
         new_note = pattern[channel_no][clk_state.note_idx]
-        if new_note.period != 0:
+        if new_note.sample_idx != 0:
             # Trigger new note
-            channel_state.reset(new_note)
+            channel_state.trigger(new_note, song.samplelist[new_note.sample_idx].volume)
 
         # else: Continue playing the last note
 
-        # Render new frame according to the channel state and pass it to the mixer
-        audio_data = render_frame(channel_state, song.samplelist)
+        # Render new frame according to the channel state
+        if channel_state.current_note != None:
+            audio_data = render_frame(channel_state, song.samplelist)
+        else:
+            audio_data = np.zeros(BUFFER_SIZE, dtype=np.int8)   # silence
+
+        # Pass it to the mixer
         channel_buffer[channel_no][:] = audio_data
         ready_flags[channel_no].set()
         

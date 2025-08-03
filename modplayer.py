@@ -19,9 +19,6 @@ def main():
     for sample in song.samplelist:
         hires_samplelist.append(interpolate(sample))
     song.setSampleList(hires_samplelist)
-
-    for sample in song.samplelist:
-        print(sample.name, sample.length, sample.loopstart, sample.looplength)
     
     # Initialize and start the clock
     clk_state = ClockState(tick_event = threading.Event(),

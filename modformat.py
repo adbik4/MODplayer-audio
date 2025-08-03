@@ -70,11 +70,11 @@ class Pattern:  # holds a pattern with 4 channels with 64 notes each
 @dataclass (frozen=True)
 class ModFile :    # holds all of the information from a .MOD file
     name            : str   # name of the song
-    samplelist      : list[Sample]  # list of all the sample recordings
     length          : int   # length of the song in patterns
     repeat_idx    : int   # pattern index where the tracker should loop
     pattern_order   : list[int] # order in which the patterns will be played
     patternlist     : list[Pattern] # list of all the patterns (4 channels each)
+    samplelist      : list[Sample] = field(default=list[Sample], compare=False, hash=False)  # list of all the sample recordings
     
     @staticmethod
     def open(filepath: str) -> ModFile:
@@ -82,7 +82,7 @@ class ModFile :    # holds all of the information from a .MOD file
         return parser.parse(filepath)
     
     def setSampleList(self, new_samplelist: list[Sample]):
-        self.samplelist = new_samplelist
+        object.__setattr__(self, "samplelist", new_samplelist)
     
     def __str__(self):
         output = "---- SONG INFO ----\n"
@@ -125,7 +125,7 @@ class ModParser:
         samplelist = self._loadSampleData(f)
 
         f.close()
-        return ModFile(name, samplelist, length, repeat_idx, pattern_order, patternlist)
+        return ModFile(name, length, repeat_idx, pattern_order, patternlist, samplelist)
         
     # private methods:
     # ---- file operations
