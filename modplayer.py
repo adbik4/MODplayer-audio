@@ -1,4 +1,3 @@
-import pyaudio
 import threading
 
 import numpy as np
@@ -12,10 +11,6 @@ def main():
     # For graceful shutdown
     stop_flag = threading.Event()
     
-    # Initialize pyAudio
-    p = pyaudio.PyAudio()
-    stream = p.open(format=pyaudio.paInt8, channels=1, rate=PLAYBACK_RATE, input=False, output=True)
-    
     # Load song
     song = ModFile.open(FILEPATH)
     
@@ -23,7 +18,7 @@ def main():
     clk_state = ClockState(tick_event = threading.Event(),
                         length = song.length,
                         repeat_idx = song.repeat_idx)
-    clock_thread = threading.Thread(target=clock, args=(clk_state, stop_flag,), daemon=True)
+    clock_thread = threading.Thread(target=clock, args=(clk_state,), daemon=True)
     clock_thread.start()
     
     # Prepare the channels output buffer
@@ -44,7 +39,7 @@ def main():
     mixer_thread.start()
     
     # Start the player
-    player_thread = threading.Thread(target=player, args=(output_buffer, stream, output_flag, stop_flag))
+    player_thread = threading.Thread(target=player, args=(output_buffer, output_flag, stop_flag))
     player_thread.start()
 
     # Wait until interrupt
@@ -61,11 +56,6 @@ def main():
     player_thread.join()
     for t in channel_threads:
         t.join()
-    
-    # Close the stream and terminate pyAudio
-    stream.stop_stream()
-    stream.close()
-    p.terminate()
 
 if __name__ == "__main__":
     main()
