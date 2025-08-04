@@ -17,8 +17,8 @@ def interpolate(sample: Sample) -> Sample:
     # No interpolation for now
     stretch_factor = np.round(PLAYBACK_RATE / SAMPLE_RATE)
 
-    sample.data = np.repeat(sample.data, stretch_factor) # this is the interpolation part
-    sample.length = sample.data.size
+    sample.data = np.repeat(sample.data, stretch_factor).tolist() # this is the interpolation part
+    sample.length = int(sample.length * stretch_factor)
     sample.loopstart = int(sample.loopstart * stretch_factor)
     sample.looplength = int(sample.looplength * stretch_factor)
     return sample
@@ -37,12 +37,13 @@ def extract_view(sample: Sample, frame_no: int) -> NDArray[np.int8]:
     if fill_ratio > 1:
         sample_data = np.tile(sample_data, fill_ratio) 
     
-    beginpos = (frame_no * BUFFER_SIZE) % sample.looplength
-    endpos = (frame_no * (BUFFER_SIZE + 1)) % sample.looplength
+    extended_length = sample.looplength * fill_ratio
+    beginpos = (frame_no * BUFFER_SIZE) % extended_length
+    endpos = (frame_no * (BUFFER_SIZE + 1)) % extended_length
 
     # Cut out the buffer
     if endpos <= beginpos:
-        result = np.append(sample_data[beginpos:sample.looplength], sample_data[0:endpos])
+        result = np.append(sample_data[beginpos:extended_length], sample_data[0:endpos])
     else:
         result = sample_data[beginpos:endpos]
     return result
@@ -56,7 +57,7 @@ def render_frame(channel_state: ChannelState, samplelist: list[Sample]) -> NDArr
     print(channel_state) # for DEBUG ONLY
 
     # Extract the right sample object
-    sample = samplelist[channel_state.current_note.sample_idx] 
+    sample = samplelist[channel_state.current_note.sample_idx + 1] 
 
     # Get a looped or trimmed sample view which is exactly BUFFER_SIZE
     trimmed_data = extract_view(sample, channel_state.current_frame)
