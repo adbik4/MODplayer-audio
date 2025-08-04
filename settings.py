@@ -1,4 +1,5 @@
 FILEPATH = "examples/_yes.mod"
+CHANNELS = [1]
 PLAYBACK_RATE = 48000
-BPM = 60
+BPM = 125
 TPB = 6

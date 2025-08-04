@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from io import BufferedReader
+from typing import BinaryIO
 from dataclasses import dataclass, fields, field
 
 # constants:
-MAGIC_IDS= ['M.K','4CHN','6CHN','8CHN','FLT4','FLT8']
+MAGIC_IDS = ['M.K', '4CHN', '6CHN', '8CHN', 'FLT4', 'FLT8']
 CHANNEL_COUNT = 4
 MAX_NOTE_COUNT = 64
 
@@ -29,32 +29,35 @@ PATTERNS_OFFSET = 0x043C
 PATTERN_SIZE = 1024
 NOTE_SIZE = 4
 
+
 # data types:
 # ---- helper data types:
 
 @dataclass
-class Sample:    # holds a sample track
-    name        : str   # sample name
-    length      : int   # number of samples
-    finetune    : int   # finetune value for dropping or lifting the pitch
-    volume      : int   # volume
-    loopstart   : int   # no of byte offset from start of sample
-    looplength  : int   # no of samples in loop [in bytes]
-    data        : list[int] = field(default_factory=list)  # the actual sample data
+class Sample:  # holds a sample track
+    name: str  # sample name
+    length: int  # number of samples
+    finetune: int  # finetune value for dropping or lifting the pitch
+    volume: int  # volume
+    loopstart: int  # no of byte offset from start of sample
+    looplength: int  # no of samples in loop [in bytes]
+    data: list[int] = field(default_factory=list)  # the actual sample data
+
 
 @dataclass
-class Note:     # holds a note
-    sample_idx  : int
-    period      : int
-    effect      : int
+class Note:  # holds a note
+    sample_idx: int
+    period: int
+    effect: int
+
 
 @dataclass
 class Pattern:  # holds a pattern with 4 channels with 64 notes each
-    ch1: list[Note] = field(default_factory=list)   # channel 1
-    ch2: list[Note] = field(default_factory=list)   # channel 2
-    ch3: list[Note] = field(default_factory=list)   # channel 3
-    ch4: list[Note] = field(default_factory=list)   # channel 4
-    
+    ch1: list[Note] = field(default_factory=list)  # channel 1
+    ch2: list[Note] = field(default_factory=list)  # channel 2
+    ch3: list[Note] = field(default_factory=list)  # channel 3
+    ch4: list[Note] = field(default_factory=list)  # channel 4
+
     # indexing support
     def __getitem__(self, index):
         field_names = [f.name for f in fields(self)]
@@ -65,58 +68,64 @@ class Pattern:  # holds a pattern with 4 channels with 64 notes each
         field_name = fields(self)[index].name
         setattr(self, field_name, value)
 
+
 # ---- the song type:
 
-@dataclass (frozen=True)
-class ModFile :    # holds all of the information from a .MOD file
-    name            : str   # name of the song
-    length          : int   # length of the song in patterns
-    repeat_idx    : int   # pattern index where the tracker should loop
-    pattern_order   : list[int] # order in which the patterns will be played
-    patternlist     : list[Pattern] # list of all the patterns (4 channels each)
-    samplelist      : list[Sample] = field(default=list[Sample], compare=False, hash=False)  # list of all the sample recordings
-    
+@dataclass(frozen=True)
+class ModFile:  # holds all of the information from a .MOD file
+    name: str  # name of the song
+    length: int  # length of the song in patterns
+    repeat_idx: int  # pattern index where the tracker should loop
+    pattern_order: list[int]  # order in which the patterns will be played
+    patternlist: list[Pattern]  # list of all the patterns (4 channels each)
+    samplelist: list[Sample] = field(default=list[Sample], compare=False,
+                                     hash=False)  # list of all the sample recordings
+
     @staticmethod
     def open(filepath: str) -> ModFile:
         parser = ModParser()
         return parser.parse(filepath)
-    
+
     def setSampleList(self, new_samplelist: list[Sample]):
         object.__setattr__(self, "samplelist", new_samplelist)
-    
+
     def __str__(self):
         output = "---- SONG INFO ----\n"
-        output += "Name: "+ self.name + "\n"
+        output += "Name: " + self.name + "\n"
         output += "Sample list:\n"
         for sample in self.samplelist:
-            output+= "\t" + ("[null]" if sample.name == '' else sample.name) + "\n"
-        output += "Length: "+ str(self.length) + "\n"
-        output += "Repeat index: "+ str(self.repeat_idx) + "\n"
-        output += "Pattern order: "+ str(self.pattern_order) + "\n"
+            output += "\t" + ("[null]" if sample.name == '' else sample.name) + "\n"
+        output += "Length: " + str(self.length) + "\n"
+        output += "Repeat index: " + str(self.repeat_idx) + "\n"
+        output += "Pattern order: " + str(self.pattern_order) + "\n"
         return output
-    
+
+
 # ---- the loader class:    
 
 # an object which can read a given .MOD file
 class ModParser:
-    __all__ = ["parse"]
-    
+    def __init__(self):
+        self.max_sample_count = 31
+        self._song_length = 0
+        self._pattern_count = 0
+
     # public method
     def parse(self, filepath: str) -> ModFile:
         f = open(filepath, "rb")
-        if (not f.readable()):
+        if not f.readable():
             print("File couldn't be read")
             quit()
-            
+
         # reset after the previous file probably changed it
-        self._pattern_count = 0    
+        self._pattern_count = 0
         self._song_length = 0
         # ----
-        
+
         # hardcoding because there are way too many variants out there to cover
         # for negligible memory savings
         self.max_sample_count = 31
-            
+
         name = self._readSongName(f)
         length = self._readSongLength(f)
         repeat_idx = self._readRepeatIdx(f)
@@ -126,7 +135,7 @@ class ModParser:
 
         f.close()
         return ModFile(name, length, repeat_idx, pattern_order, patternlist, samplelist)
-        
+
     # private methods:
     # ---- file operations
     @staticmethod
@@ -134,15 +143,15 @@ class ModParser:
         return data.translate(None, b'\0').decode("CP437")
 
     @staticmethod
-    def _toInt_LE(data:bytes) -> int:
+    def _toInt_LE(data: bytes) -> int:
         return int.from_bytes(data, "little")
 
     @staticmethod
-    def _toInt_BE(data:bytes) -> int:
+    def _toInt_BE(data: bytes) -> int:
         return int.from_bytes(data, "big")
 
     @staticmethod
-    def _readBlock(f: BufferedReader, offset: int, length: int) -> bytes:
+    def _readBlock(f: BinaryIO, offset: int, length: int) -> bytes:
         f.seek(offset)
         return f.read(length)
 
@@ -151,16 +160,16 @@ class ModParser:
     # extract a smaller sequence of bits from a bytes object. Returns an int
     def _extractBits(self, data: bytes, start: int, end: int) -> int:
         wordlen = len(data) * 8
-        if (start < wordlen and start >= 0) and (end < wordlen and end >= 0) and (start <= end):
+        if (wordlen > start >= 0) and (wordlen > end >= 0) and (start <= end):
             value = self._toInt_BE(data)
             shifted = value >> (wordlen - end - 1)
-            result = shifted & (2**(end - start + 1) - 1)
+            result = shifted & (2 ** (end - start + 1) - 1)
             return result
         return -1
 
     # unpacks raw note data
     def _extractNoteInfo(self, data: bytes) -> tuple[int, int, int]:
-        sample = (self._extractBits(data, 0, 3) << 4) + self._extractBits(data, 15, 19)
+        sample = (self._extractBits(data, 0, 3) << 4) + self._extractBits(data, 15, 19) - 1
         period = self._extractBits(data, 4, 15)
         effect = self._extractBits(data, 20, 31)
         return sample, period, effect
@@ -168,20 +177,20 @@ class ModParser:
     # ---- data structure operations
 
     # name of the song
-    def _readSongName(self, f: BufferedReader) -> str:
+    def _readSongName(self, f: BinaryIO) -> str:
         data = self._readBlock(f, SONGNAME_OFFSET, SONGNAME_LEN)
         return self._toString(data)
 
     # information about the samples
     # DON'T CALL DIRECTLY
-    def _loadSampleInfo(self, f: BufferedReader) -> list[Sample]:
+    def _loadSampleInfo(self, f: BinaryIO) -> list[Sample]:
         sample_array = []
         for i in range(self.max_sample_count):
-            f.seek(SAMPLEARR_OFFSET + SAMPLEBLOCK_SIZE*i)
+            f.seek(SAMPLEARR_OFFSET + SAMPLEBLOCK_SIZE * i)
             name = self._toString(f.read(SAMPLENAME_LEN))
             length = self._toInt_BE(f.read(2)) * 2
-            finetune = self._extractBits(f.read(1), 0, 3) 
-            volume = self._toInt_BE(f.read(1)) 
+            finetune = self._extractBits(f.read(1), 0, 3)
+            volume = self._toInt_BE(f.read(1))
             loopstart = self._toInt_BE(f.read(2)) * 2
             looplength = self._toInt_BE(f.read(2)) * 2
 
@@ -189,38 +198,38 @@ class ModParser:
         return sample_array
 
     # length of the song
-    def _readSongLength(self, f: BufferedReader) -> int:
+    def _readSongLength(self, f: BinaryIO) -> int:
         data = self._readBlock(f, SONGLENGTH_OFFSET, 1)
         self._song_length = self._toInt_BE(data)
         return self._song_length
 
     # noisetracker uses this byte for restart before the end of file
-    def _readRepeatIdx(self, f: BufferedReader) -> int:
+    def _readRepeatIdx(self, f: BinaryIO) -> int:
         data = self._readBlock(f, SEARCHUNTIL_OFFSET, 1)
         return self._toInt_BE(data)
 
     # reads a given channel (0-3) of a given pattern
-    def _readChannel(self, f: BufferedReader, pattern_no:int, channel_no: int) -> list[Note]:
+    def _readChannel(self, f: BinaryIO, pattern_no: int, channel_no: int) -> list[Note]:
         notelist = []
         for note_idx in range(MAX_NOTE_COUNT):
-            base_addr = PATTERNS_OFFSET + pattern_no*PATTERN_SIZE + channel_no*NOTE_SIZE
-            note_addr = base_addr + note_idx*NOTE_SIZE*CHANNEL_COUNT
-            note_data = self._readBlock(f, note_addr , 4)
-            
+            base_addr = PATTERNS_OFFSET + pattern_no * PATTERN_SIZE + channel_no * NOTE_SIZE
+            note_addr = base_addr + note_idx * NOTE_SIZE * CHANNEL_COUNT
+            note_data = self._readBlock(f, note_addr, 4)
+
             sample_idx, period, effect = self._extractNoteInfo(note_data)
             notelist.append(Note(sample_idx, period, effect))
         return notelist
 
     # 128 positions that tell the tracker what pattern (0-63) to play at that position (0-127)
     # CALL BEFORE loadPatternData() and loadSampleData()
-    def _loadPatternPositions(self, f: BufferedReader) -> list[int]:
+    def _loadPatternPositions(self, f: BinaryIO) -> list[int]:
         data = list(self._readBlock(f, PATTERNPOS_OFFSET, PATTERNPOS_LEN))[0:self._song_length]
-        self._pattern_count = max(data) + 1    # save for later
+        self._pattern_count = max(data) + 1  # save for later
         return data
-    
+
     # the actual note layout and rythm information
     # CALL loadPatternPositions() FIRST, because of pattern_count
-    def _loadPatternData(self, f: BufferedReader) -> list[Pattern]:
+    def _loadPatternData(self, f: BinaryIO) -> list[Pattern]:
         pattern_array = []
         for pattern_idx in range(self._pattern_count):
             pattern = Pattern()
@@ -228,23 +237,23 @@ class ModParser:
                 pattern[channel_idx] = self._readChannel(f, pattern_idx, channel_idx)
             pattern_array.append(pattern)
         return pattern_array
-    
+
     # the actual sample recordings
     # CALL loadPatternPositions() FIRST, because of pattern_count
-    def _loadSampleData(self, f: BufferedReader) -> list[Sample]:
+    def _loadSampleData(self, f: BinaryIO) -> list[Sample]:
         sample_array = self._loadSampleInfo(f)
-        
+
         offset = 0
         sample_count = len(sample_array)
         for i in range(sample_count):
             sample = sample_array[i]
-            base_addr = PATTERNS_OFFSET + self._pattern_count*PATTERN_SIZE
+            base_addr = PATTERNS_OFFSET + self._pattern_count * PATTERN_SIZE
             address = base_addr + offset
             sample.data = list(self._readBlock(f, address, sample.length))
             offset += sample.length
         return sample_array
 
     # reads the magic 4 bytes which indicate the module version
-    def _readMagic(self, f: BufferedReader) -> str:
+    def _readMagic(self, f: BinaryIO) -> str:
         data = self._readBlock(f, MAGIC_OFFSET, 4)
         return self._toString(data)

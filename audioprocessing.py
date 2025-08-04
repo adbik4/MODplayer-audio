@@ -10,36 +10,36 @@ SAMPLE_RATE = 16000
 
 # ---- function definitions
 
-def transpose(data: NDArray[np.int8], period: int) -> NDArray[np.int8]:
-    return data # TO IMPLEMENT
 
 def interpolate(sample: Sample) -> Sample:
-    # No interpolation for now
     stretch_factor = np.round(PLAYBACK_RATE / SAMPLE_RATE)
 
-    sample.data = np.repeat(sample.data, stretch_factor).tolist() # this is the interpolation part
+    # this is the interpolation part
+    sample.data = np.repeat(sample.data, stretch_factor).tolist()
+    # TODO: add more interpolation options
+
     sample.length = int(sample.length * stretch_factor)
     sample.loopstart = int(sample.loopstart * stretch_factor)
     sample.looplength = int(sample.looplength * stretch_factor)
     return sample
+
 
 def extract_view(sample: Sample, frame_no: int) -> NDArray[np.int8]:
     # convert to numpy array
     sample_data = np.array(sample.data, dtype=np.int8)
 
     # Loop point support
-    print(sample)
     if sample.looplength != sample.length:
-        sample_data = sample_data[sample.loopstart:(sample.loopstart+sample.looplength)]
+        sample_data = sample_data[sample.loopstart:(sample.loopstart + sample.looplength)]
 
     # Loop until the sample_data is longer than the buffer
     fill_ratio = int(np.ceil(BUFFER_SIZE / sample.looplength))
     if fill_ratio > 1:
-        sample_data = np.tile(sample_data, fill_ratio) 
-    
+        sample_data = np.tile(sample_data, fill_ratio)
+
     extended_length = sample.looplength * fill_ratio
     beginpos = (frame_no * BUFFER_SIZE) % extended_length
-    endpos = (frame_no * (BUFFER_SIZE + 1)) % extended_length
+    endpos = ((frame_no + 1) * BUFFER_SIZE) % extended_length
 
     # Cut out the buffer
     if endpos <= beginpos:
@@ -48,24 +48,35 @@ def extract_view(sample: Sample, frame_no: int) -> NDArray[np.int8]:
         result = sample_data[beginpos:endpos]
     return result
 
+
+def transpose(data: NDArray[np.int8], period: int) -> NDArray[np.int8]:
+    # TODO: implement pitch renderer
+    return data
+
+
 def apply_effect(data: NDArray[np.int8], effect_id: int) -> NDArray[np.int8]:
-    return data # TO IMPLEMENT
+    # TODO: implement effect renderer
+    return data
+
 
 # ---- the note renderer
 
 def render_frame(channel_state: ChannelState, samplelist: list[Sample]) -> NDArray[np.int8]:
-    print(channel_state) # for DEBUG ONLY
+    print(channel_state)  # for DEBUG ONLY
+
+    if channel_state.current_sample is None:
+        return np.zeros(BUFFER_SIZE, dtype=np.int8)  # silence
 
     # Extract the right sample object
-    sample = samplelist[channel_state.current_note.sample_idx + 1] 
+    sample = samplelist[channel_state.current_sample]
 
     # Get a looped or trimmed sample view which is exactly BUFFER_SIZE
     trimmed_data = extract_view(sample, channel_state.current_frame)
-    
+
     # Transpose to the current frequency
-    transposed_sample = transpose(trimmed_data, channel_state.current_note.period)
+    transposed_sample = transpose(trimmed_data, channel_state.current_period)
 
     # Apply the current effect
-    final_sample = apply_effect(transposed_sample, channel_state.current_note.effect)
-    
+    final_sample = apply_effect(transposed_sample, channel_state.current_effect)
+
     return final_sample

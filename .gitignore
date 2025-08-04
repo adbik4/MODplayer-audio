@@ -1,5 +1,4 @@
 examples/
-milkytracker/
 __pycache__/
 analysis.py
 architecture.txt
