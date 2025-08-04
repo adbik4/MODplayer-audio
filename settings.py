@@ -1,6 +1,6 @@
 FILEPATH = "examples/the_objttze.mod"
 CHANNELS = [1]
-START_PATTERN, START_NOTE = (7, 0)
+START_PATTERN, START_NOTE = (0, 0)
 
 PLAYBACK_RATE = 48000
 BPM = 60

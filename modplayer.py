@@ -8,9 +8,9 @@ from typelib import ClockState, BUFFER_SIZE
 
 
 def main():
-    stop_flag = threading.Event()                           # For graceful shutdown
-    channel_flags = [threading.Event() for _ in range(4)]   # signal to the mixer when the channels finish writing
-    output_flag = threading.Event()                         # signals to the player when the mixer finishes writing
+    stop_flag = threading.Event()                          # For graceful shutdown
+    channel_locks = [threading.Lock() for _ in range(4)]   # signal to the mixer when the channels finish writing
+    output_lock = threading.Lock()                         # signals to the player when the mixer finishes writing
 
     # Load song
     song = ModFile.open(FILEPATH)
@@ -38,17 +38,17 @@ def main():
     channel_threads = []
     for i in CHANNELS:
         if 0 <= i <= 3:
-            t = threading.Thread(target=channel, args=(i, clk_state, song, channel_buffer, channel_flags, stop_flag,))
+            t = threading.Thread(target=channel, args=(i, clk_state, song, channel_buffer, channel_locks, stop_flag,))
             t.start()
             channel_threads.append(t)
 
     # Start the mixer
     output_buffer = np.zeros(BUFFER_SIZE, dtype=np.int8)
-    mixer_thread = threading.Thread(target=mixer, args=(channel_buffer, output_buffer, channel_flags, clk_state, output_flag, stop_flag,))
+    mixer_thread = threading.Thread(target=mixer, args=(channel_buffer, output_buffer, channel_locks, clk_state, output_lock, stop_flag,))
     mixer_thread.start()
 
     # Start the player
-    player_thread = threading.Thread(target=player, args=(output_buffer, output_flag, stop_flag,))
+    player_thread = threading.Thread(target=player, args=(output_buffer, output_lock, stop_flag,))
     player_thread.start()
 
     # Wait until interrupt
