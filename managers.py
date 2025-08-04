@@ -3,13 +3,14 @@ import pyaudio
 import numpy as np
 from threading import Event
 from numpy.typing import NDArray
-from settings import PLAYBACK_RATE
+from settings import PLAYBACK_RATE, CHANNELS
 from typelib import ChannelState, ClockState, TICK_RATE, BUFFER_SIZE
-from audioprocessing import render_frame
+from audioprocessing import render_frame, silence
 
 
 # ---- thread definitions
 
+# Makes sure the channels are always perfectly synchronised
 def clock(clk_state):
     while True:
         # Correct for any delay and wait
@@ -25,9 +26,9 @@ def clock(clk_state):
         clk_state.next_tick += TICK_RATE
 
 
+# Keeps track of the current note to play and calls the render_frame function
 def channel(channel_no, clk_state, song, channel_buffer, ready_flags, stop_flag):
     # Initialise the channel state
-    print("hello from channel", channel_no)
     channel_state = ChannelState()
 
     while not stop_flag.is_set():
@@ -41,9 +42,10 @@ def channel(channel_no, clk_state, song, channel_buffer, ready_flags, stop_flag)
             channel_state.increment(new_note)
         else:
             # Trigger new note
-            channel_state.trigger(new_note, song.samplelist[new_note.sample_idx].volume)
+            channel_state.trigger(new_note)
 
         # Render new frame
+        print(channel_no, channel_state)  # for DEBUG ONLY
         audio_data = render_frame(channel_state, song.samplelist)
 
         # Pass it to the mixer
@@ -54,17 +56,22 @@ def channel(channel_no, clk_state, song, channel_buffer, ready_flags, stop_flag)
         clk_state.tick_event.wait()
 
 
+# Mixes channels and passes them to the player
 def mixer(channel_buffer, output_buffer: NDArray[np.int8], channel_flags: list[Event], clk_state: ClockState, output_flag: Event, stop_flag: Event):
-    # Mix channels and pass the buffer to the player
     while not stop_flag.is_set():
-        channel_flags[1].wait()
-        output_buffer[:] = channel_buffer[0]
-        channel_flags[1].clear()
+        tmp_buffer = silence(BUFFER_SIZE)
+
+        for i in CHANNELS:
+            channel_flags[i].wait()
+            tmp_buffer += channel_buffer[i]
+            channel_flags[i].clear()
+        output_buffer[:] = tmp_buffer
         output_flag.set()
 
         clk_state.tick_event.wait()
 
 
+# Manages the sound settings, playback, creation and destruction of the audio stream
 def player(buffer: NDArray[np.int8], output_flag: Event, stop_flag: Event):
     # Initialize pyAudio
     p = pyaudio.PyAudio()
@@ -76,10 +83,15 @@ def player(buffer: NDArray[np.int8], output_flag: Event, stop_flag: Event):
 
     # Wait for the beginning of new frame and playback the buffer
     while not stop_flag.is_set():
+        # Once the mixer stops writing, cache the buffer
         output_flag.wait()
         cache = buffer.tobytes()
+
+        # Clear the buffer
+        buffer[:] = silence(BUFFER_SIZE)
         output_flag.clear()
 
+        # Playback
         stream.write(cache)
 
     # Close the stream and terminate pyAudio

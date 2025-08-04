@@ -20,6 +20,7 @@ class ClockState:
 
     pattern_idx: int = 0
     note_idx: int = 0
+
     next_tick = time.perf_counter() + TICK_RATE
 
     # Modulo and looping logic
@@ -47,7 +48,7 @@ class ChannelState:
     current_period: int = 0
     current_effect: int = 0
 
-    def trigger(self, new_note: Note, volume: int):
+    def trigger(self, new_note: Note):
         self.current_frame = 0
         self.current_sample = new_note.sample_idx
         self.current_period = new_note.period

@@ -165,11 +165,10 @@ class ModParser:
             shifted = value >> (wordlen - end - 1)
             result = shifted & (2 ** (end - start + 1) - 1)
             return result
-        return -1
 
     # unpacks raw note data
     def _extractNoteInfo(self, data: bytes) -> tuple[int, int, int]:
-        sample = (self._extractBits(data, 0, 3) << 4) + self._extractBits(data, 15, 19) - 1
+        sample = (self._extractBits(data, 0, 3) << 4) + self._extractBits(data, 16, 19) - 1
         period = self._extractBits(data, 4, 15)
         effect = self._extractBits(data, 20, 31)
         return sample, period, effect

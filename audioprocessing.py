@@ -59,13 +59,17 @@ def apply_effect(data: NDArray[np.int8], effect_id: int) -> NDArray[np.int8]:
     return data
 
 
+def silence(length: int) -> NDArray[np.int8]:
+    return np.zeros(length, dtype=np.int8)
+
+
 # ---- the note renderer
 
 def render_frame(channel_state: ChannelState, samplelist: list[Sample]) -> NDArray[np.int8]:
-    print(channel_state)  # for DEBUG ONLY
 
     if channel_state.current_sample is None:
-        return np.zeros(BUFFER_SIZE, dtype=np.int8)  # silence
+        print("SILENCE")
+        return silence(BUFFER_SIZE)
 
     # Extract the right sample object
     sample = samplelist[channel_state.current_sample]

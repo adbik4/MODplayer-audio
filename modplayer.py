@@ -1,7 +1,7 @@
 import threading
 
 from managers import *
-from settings import FILEPATH, CHANNELS
+from settings import FILEPATH, CHANNELS, START_PATTERN, START_NOTE
 from modformat import ModFile
 from audioprocessing import interpolate
 from typelib import ClockState, BUFFER_SIZE
@@ -25,7 +25,9 @@ def main():
     # TODO: refactor the thread flags into a dataclass
     clk_state = ClockState(tick_event=threading.Event(),
                            length=song.length,
-                           repeat_idx=song.repeat_idx)
+                           repeat_idx=song.repeat_idx,
+                           pattern_idx=START_PATTERN,
+                           note_idx=START_NOTE)
     clock_thread = threading.Thread(target=clock, args=(clk_state,), daemon=True)
     clock_thread.start()
 

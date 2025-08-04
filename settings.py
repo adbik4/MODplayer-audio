@@ -1,5 +1,7 @@
-FILEPATH = "examples/_yes.mod"
+FILEPATH = "examples/the_objttze.mod"
 CHANNELS = [1]
+START_PATTERN, START_NOTE = (7, 0)
+
 PLAYBACK_RATE = 48000
-BPM = 125
+BPM = 60
 TPB = 6
