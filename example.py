@@ -1,5 +1,5 @@
 from modformat import ModFile
-filepath = "examples/savedick.mod"
+filepath = "examples/_yes.mod"
 
 song = ModFile.open(filepath)
 for sample in song.samplelist:

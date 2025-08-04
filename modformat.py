@@ -38,9 +38,9 @@ class Sample:    # holds a sample track
     length      : int   # number of samples
     finetune    : int   # finetune value for dropping or lifting the pitch
     volume      : int   # volume
-    loopstart : int   # no of byte offset from start of sample
-    looplength     : int   # no of samples in loop [in bytes]
-    data        : list[int] = field(default_factory=list)  # the actual sample data, empty at first
+    loopstart   : int   # no of byte offset from start of sample
+    looplength  : int   # no of samples in loop [in bytes]
+    data        : list[int] = field(default_factory=list)  # the actual sample data
 
 @dataclass
 class Note:     # holds a note

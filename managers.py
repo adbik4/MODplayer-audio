@@ -59,6 +59,7 @@ def mixer(channel_buffer, output_buffer: NDArray[np.int8], channel_flags: list[E
         output_buffer[:] = channel_buffer[0]
         channel_flags[0].clear()
         output_flag.set()
+        
         clk_state.tick_event.wait()
 
 def player(buffer: NDArray[np.int8], output_flag: Event, stop_flag: Event):

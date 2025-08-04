@@ -33,7 +33,7 @@ def main():
     
     # Start the channel threads and store them
     channel_threads = []
-    for i in range(1):
+    for i in range(4):
         t = threading.Thread(target=channel, args=(i, clk_state, song, channel_buffer, channel_flags, stop_flag))
         t.start()
         channel_threads.append(t)

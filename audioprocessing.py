@@ -2,7 +2,7 @@ import numpy as np
 from numpy.typing import NDArray
 from settings import PLAYBACK_RATE
 from modformat import Sample
-from typelib import ChannelState, TICK_RATE, BUFFER_SIZE
+from typelib import ChannelState, BUFFER_SIZE
 
 # ---- local constants
 
@@ -19,20 +19,32 @@ def interpolate(sample: Sample) -> Sample:
 
     sample.data = np.repeat(sample.data, stretch_factor) # this is the interpolation part
     sample.length = sample.data.size
-    sample.loopstart *= stretch_factor
-    sample.looplength *= stretch_factor
+    sample.loopstart = int(sample.loopstart * stretch_factor)
+    sample.looplength = int(sample.looplength * stretch_factor)
     return sample
 
-def extract_view(sample: Sample) -> NDArray[np.int8]:
-    # if the sample should loop, loop it to the proper len
-    # else, append 0s
+def extract_view(sample: Sample, frame_no: int) -> NDArray[np.int8]:
+    # convert to numpy array
+    sample_data = np.array(sample.data, dtype=np.int8)
 
-    tick_length = int(TICK_RATE * PLAYBACK_RATE)
+    # Loop point support
+    print(sample)
+    if sample.looplength != sample.length:
+        sample_data = sample_data[sample.loopstart:(sample.loopstart+sample.looplength)]
+
+    # Loop until the sample_data is longer than the buffer
+    fill_ratio = int(np.ceil(BUFFER_SIZE / sample.looplength))
+    if fill_ratio > 1:
+        sample_data = np.tile(sample_data, fill_ratio) 
     
-    if data.size > tick_length:
-        result = data[0:tick_length]
+    beginpos = (frame_no * BUFFER_SIZE) % sample.looplength
+    endpos = (frame_no * (BUFFER_SIZE + 1)) % sample.looplength
+
+    # Cut out the buffer
+    if endpos <= beginpos:
+        result = np.append(sample_data[beginpos:sample.looplength], sample_data[0:endpos])
     else:
-        result = np.append(data, np.zeros(tick_length - data.size, dtype=np.int8)) # TO IMPLEMENT
+        result = sample_data[beginpos:endpos]
     return result
 
 def apply_effect(data: NDArray[np.int8], effect_id: int) -> NDArray[np.int8]:
@@ -43,33 +55,16 @@ def apply_effect(data: NDArray[np.int8], effect_id: int) -> NDArray[np.int8]:
 def render_frame(channel_state: ChannelState, samplelist: list[Sample]) -> NDArray[np.int8]:
     print(channel_state) # for DEBUG ONLY
 
-    # extract the sample data
+    # Extract the right sample object
     sample = samplelist[channel_state.current_note.sample_idx] 
 
     # Get a looped or trimmed sample view which is exactly BUFFER_SIZE
-    clean_data = extract_view(sample)
+    trimmed_data = extract_view(sample, channel_state.current_frame)
     
+    # Transpose to the current frequency
+    transposed_sample = transpose(trimmed_data, channel_state.current_note.period)
 
-    # Get the right sample range for the output buffer
-    start_point = (channel_state.current_frame * BUFFER_SIZE) % sample.length
-    end_point = ((channel_state.current_frame + 1) * BUFFER_SIZE) % sample.length
-
-    if start_point > sample.length:
-        start_point = 0     # or later, the loop start pos
-    if end_point > sample.length:
-        end_point = sample.length
-
-    raw_sample = np.array(sample.data[start_point:end_point]).astype(np.int8)
-
-    # Trim or loop the sample for the right timing
-    timed_sample = adjust_len(hires_sample)
-    
-    # Transpose to the proper frequency
-    transposed_sample = transpose(raw_sample, note.period)
-
-    
-    
-    # Apply the selected effect
-    final_sample = apply_effect(timed_sample, note.effect)
+    # Apply the current effect
+    final_sample = apply_effect(transposed_sample, channel_state.current_note.effect)
     
     return final_sample
