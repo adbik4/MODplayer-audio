@@ -143,12 +143,12 @@ class ModParser:
         return data.translate(None, b'\0').decode("CP437")
 
     @staticmethod
-    def _toInt_LE(data: bytes) -> int:
-        return int.from_bytes(data, "little")
+    def _toUInt_LE(data: bytes) -> int:
+        return int.from_bytes(data, "little", signed=False)
 
     @staticmethod
-    def _toInt_BE(data: bytes) -> int:
-        return int.from_bytes(data, "big")
+    def _toUInt_BE(data: bytes) -> int:
+        return int.from_bytes(data, "big", signed=False)
 
     @staticmethod
     def _readBlock(f: BinaryIO, offset: int, length: int) -> bytes:
@@ -161,7 +161,7 @@ class ModParser:
     def _extractBits(self, data: bytes, start: int, end: int) -> int:
         wordlen = len(data) * 8
         if (wordlen > start >= 0) and (wordlen > end >= 0) and (start <= end):
-            value = self._toInt_BE(data)
+            value = self._toUInt_BE(data)
             shifted = value >> (wordlen - end - 1)
             result = shifted & (2 ** (end - start + 1) - 1)
             return result
@@ -185,13 +185,22 @@ class ModParser:
     def _loadSampleInfo(self, f: BinaryIO) -> list[Sample]:
         sample_array = []
         for i in range(self.max_sample_count):
+
+            # debug: dump the raw two bytes at this sample offset
+            # offset = SAMPLEARR_OFFSET + SAMPLEBLOCK_SIZE * i
+            # f.seek(offset + SAMPLENAME_LEN + 2 + 1 + 1 + 2)  # point to the two-byte length field
+            # two = f.read(2)
+            # print("at sample", i, "offset", hex(offset + SAMPLENAME_LEN), "bytes", two.hex(),
+            #       "big:", int.from_bytes(two, 'big'),
+            #       "little:", int.from_bytes(two, 'little'))
+
             f.seek(SAMPLEARR_OFFSET + SAMPLEBLOCK_SIZE * i)
             name = self._toString(f.read(SAMPLENAME_LEN))
-            length = self._toInt_BE(f.read(2)) * 2
-            finetune = self._extractBits(f.read(1), 0, 3)
-            volume = self._toInt_BE(f.read(1))
-            loopstart = self._toInt_BE(f.read(2)) * 2
-            looplength = self._toInt_BE(f.read(2)) * 2
+            length = self._toUInt_BE(f.read(2)) * 2
+            finetune = self._extractBits(f.read(1), 4, 7)    # lower nibble
+            volume = self._toUInt_BE(f.read(1))
+            loopstart = self._toUInt_BE(f.read(2)) * 2
+            looplength = self._toUInt_BE(f.read(2)) * 2
 
             sample_array.append(Sample(name, length, finetune, volume, loopstart, looplength))
         return sample_array
@@ -199,13 +208,13 @@ class ModParser:
     # length of the song
     def _readSongLength(self, f: BinaryIO) -> int:
         data = self._readBlock(f, SONGLENGTH_OFFSET, 1)
-        self._song_length = self._toInt_BE(data)
+        self._song_length = self._toUInt_BE(data)
         return self._song_length
 
     # noisetracker uses this byte for restart before the end of file
     def _readRepeatIdx(self, f: BinaryIO) -> int:
         data = self._readBlock(f, SEARCHUNTIL_OFFSET, 1)
-        return self._toInt_BE(data)
+        return self._toUInt_BE(data)
 
     # reads a given channel (0-3) of a given pattern
     def _readChannel(self, f: BinaryIO, pattern_no: int, channel_no: int) -> list[Note]:

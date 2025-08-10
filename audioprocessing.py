@@ -7,6 +7,7 @@ from typelib import ChannelState, BUFFER_SIZE
 # ---- local constants
 
 SAMPLE_RATE = 16000
+NO_LOOP = 2
 
 # ---- function definitions
 
@@ -17,6 +18,11 @@ def interpolate(sample: Sample) -> Sample:
     # this is the interpolation part
     sample.data = np.repeat(sample.data, stretch_factor).tolist()
     # TODO: add more interpolation options
+
+    # for some tracker editors
+    if sample.looplength == NO_LOOP:
+        sample.loopstart = 0
+        sample.looplength = sample.length
 
     sample.length = int(sample.length * stretch_factor)
     sample.loopstart = int(sample.loopstart * stretch_factor)
