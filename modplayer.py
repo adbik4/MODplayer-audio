@@ -27,7 +27,7 @@ def main():
 
     # Prepare the channels output buffer and output queue
     channel_buffer = np.zeros((4, BUFFER_SIZE), dtype=np.int8)
-    output_queue = queue.Queue()
+    output_queue = queue.Queue(10)
 
     # Start the channel threads and store them
     ch_threads = []
@@ -48,6 +48,8 @@ def main():
     player_thread_info = PlayerThreadInfo(stop_flag)
     player_thread = threading.Thread(target=player, args=(output_queue, player_thread_info,))
     player_thread.start()
+
+    print("NOW PLAYING: ", song.name)
 
     # Wait until interrupt
     try:

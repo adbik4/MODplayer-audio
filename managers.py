@@ -36,12 +36,9 @@ def channel(channel_no: int, song: ModFile, thread_info: ChannelThreadInfo):
             # Trigger new note
             channel_state.trigger(new_note)
 
-        # Render new frame
-        print(channel_no, channel_state)  # for USE_PROFILER ONLY
-        audio_data = render_frame(channel_state, song.samplelist)
-
-        # Pass it to the mixer
+        # Render a new frame and pass it to the mixer
         thread_info.channel_locks[channel_no].acquire()
+        audio_data = render_frame(channel_state, song.samplelist)
         thread_info.channel_buffer[channel_no][:] = audio_data
         thread_info.channel_locks[channel_no].release()
 
@@ -68,13 +65,17 @@ def mixer(output_queue: queue, thread_info: MixerThreadInfo):
         for i in CHANNELS:
             thread_info.channel_locks[i].acquire()
             buffer += thread_info.channel_buffer[i]
-            thread_info.channel_locks[i].release()
 
         # Average
         buffer = (buffer.astype(np.float32) / len(CHANNELS)).astype(np.int8)
+        buffer = np.clip(buffer, -127, 127)
 
-        # Pass the output to the player
+        # Pass the output to the player if theres place in the queue
         output_queue.put(buffer.tobytes())
+
+        # Only then let the channels generate more samples
+        for j in CHANNELS:
+            thread_info.channel_locks[j].release()
 
         # increment the metronome
         thread_info.beat_ptr.note_idx += 1
@@ -99,7 +100,8 @@ def player(output_queue: queue, thread_info: PlayerThreadInfo):
                     channels=1,
                     rate=PLAYBACK_RATE,
                     input=False,
-                    output=True)
+                    output=True,
+                    frames_per_buffer=BUFFER_SIZE)
 
     # Wait for the beginning of new frame and playback the buffer
     while not thread_info.stop_flag.is_set():

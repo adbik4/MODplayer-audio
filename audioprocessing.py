@@ -28,6 +28,9 @@ def extract_view(sample: Sample, frame_no: int) -> NDArray[np.int8]:
     # Convert to Numpy array
     data = np.array(sample.data, dtype=np.int8)
 
+    # Allocate buffer
+    result = silence(BUFFER_SIZE)
+
     # Handle loop vs non-loop regions
     if sample.has_loop:
         loop_region = data[sample.loopstart:sample.loopstart + sample.looplength]
@@ -46,7 +49,7 @@ def extract_view(sample: Sample, frame_no: int) -> NDArray[np.int8]:
         if start_sample >= total_len:
             return silence(BUFFER_SIZE)
 
-        result = silence(BUFFER_SIZE)
+        result[:] = 0
         slice_end = min(end_sample, total_len)
         chunk_len = slice_end - start_sample  # always >= 0 now
         if chunk_len > 0:
@@ -54,7 +57,7 @@ def extract_view(sample: Sample, frame_no: int) -> NDArray[np.int8]:
         return result
 
     # Loop exists
-    result = silence(BUFFER_SIZE)
+    result[:] = 0
     pos = start_sample
     out_pos = 0
 
@@ -96,7 +99,6 @@ def silence(length: int) -> NDArray[np.int8]:
 def render_frame(channel_state: ChannelState, samplelist: list[Sample]) -> NDArray[np.int8]:
 
     if channel_state.current_sample is None:
-        print("SILENCE")
         return silence(BUFFER_SIZE)
 
     # Extract the right sample object
