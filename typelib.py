@@ -2,7 +2,9 @@ import time
 from modformat import Note, MAX_NOTE_COUNT
 from settings import BPM, TPB, PLAYBACK_RATE
 from dataclasses import dataclass
-from threading import Event
+from threading import Event, Lock
+from numpy.typing import NDArray
+import numpy as np
 
 # global constants
 TICK_RATE = 60 / (BPM * TPB)
@@ -57,3 +59,37 @@ class ChannelState:
     def increment(self, continued_note: Note):
         self.current_frame += 1
         self.current_effect = continued_note.effect
+
+
+# Contains the flags, events and locks for the clock thread
+@dataclass
+class ClockThreadInfo:
+    start_flag: Event
+    stop_flag:  Event
+
+
+# Contains the flags, events and locks for the channel thread
+@dataclass
+class ChannelThreadInfo:
+    stop_flag:      Event
+    channel_buffer: NDArray[np.int8]
+    channel_locks:  list[Lock]
+
+
+# Contains the flags, events and locks for the mixer thread
+@dataclass
+class MixerThreadInfo:
+    channel_buffer: NDArray[np.int8]
+    output_buffer:  NDArray[np.int8]
+    channel_locks:  list[Lock]
+    output_lock:    Lock
+    stop_flag:      Event
+
+
+# Contains the flags, events and locks for the player thread
+@dataclass
+class PlayerThreadInfo:
+    output_buffer:  NDArray[np.int8]
+    output_lock:    Lock
+    start_flag:     Event
+    stop_flag:      Event

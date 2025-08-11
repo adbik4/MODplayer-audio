@@ -1,10 +1,7 @@
-import time
 import pyaudio
-import numpy as np
-from threading import Lock, Event
-from numpy.typing import NDArray
-from settings import PLAYBACK_RATE, CHANNELS, USE_PROFILER
-from typelib import ChannelState, ClockState, TICK_RATE, BUFFER_SIZE
+from typelib import *
+from modformat import ModFile
+from settings import CHANNELS, USE_PROFILER
 from audioprocessing import render_frame, silence
 
 import pyinstrument
@@ -14,8 +11,11 @@ from pyinstrument.renderers import HTMLRenderer
 # ---- thread definitions
 
 # Makes sure the channels are always perfectly synchronised
-def clock(clk_state, stop_flag):
-    while not stop_flag.is_set():
+def clock(clk_state: ClockState, thread_info: ClockThreadInfo):
+    # Wait until the Player is initialised
+    thread_info.start_flag.wait()
+
+    while not thread_info.stop_flag.is_set():
         # Correct for any delay and wait
         now = time.perf_counter()
         time.sleep(max(0, clk_state.next_tick - now))
@@ -30,7 +30,7 @@ def clock(clk_state, stop_flag):
 
 
 # Keeps track of the current note to play and calls the render_frame function
-def channel(channel_no: int, clk_state: ClockState, song, channel_buffer: NDArray[np.uint8], channel_locks: list[Lock], stop_flag: Event):
+def channel(channel_no: int, clk_state: ClockState, song: ModFile, thread_info: ChannelThreadInfo):
     if USE_PROFILER:
         profiler = pyinstrument.Profiler()
         profiler.start()
@@ -39,7 +39,7 @@ def channel(channel_no: int, clk_state: ClockState, song, channel_buffer: NDArra
     # Initialise the channel state
     channel_state = ChannelState()
 
-    while not stop_flag.is_set():
+    while not thread_info.stop_flag.is_set():
         # Unpack the current pattern
         pattern = song.patternlist[song.pattern_order[clk_state.pattern_idx]]
 
@@ -57,9 +57,9 @@ def channel(channel_no: int, clk_state: ClockState, song, channel_buffer: NDArra
         audio_data = render_frame(channel_state, song.samplelist)
 
         # Pass it to the mixer
-        channel_locks[channel_no].acquire()
-        channel_buffer[channel_no][:] = audio_data
-        channel_locks[channel_no].release()
+        thread_info.channel_locks[channel_no].acquire()
+        thread_info.channel_buffer[channel_no][:] = audio_data
+        thread_info.channel_locks[channel_no].release()
 
         # Wait for the next tick
         clk_state.tick_event.wait()
@@ -72,33 +72,34 @@ def channel(channel_no: int, clk_state: ClockState, song, channel_buffer: NDArra
 
 
 # Mixes channels and passes them to the player
-def mixer(channel_buffer, output_buffer: NDArray[np.int8], channel_locks: list[Lock], clk_state: ClockState, output_lock: Lock, stop_flag: Event):
+def mixer(clk_state: ClockState, thread_info: MixerThreadInfo):
     if USE_PROFILER:
         profiler = pyinstrument.Profiler()
         profiler.start()
 
     # ---- profiled code
-    while not stop_flag.is_set():
+    while not thread_info.stop_flag.is_set():
         # Clear workspace
         tmp_buffer = silence(BUFFER_SIZE)
 
+        # Wait for the buffer to be filled
+        clk_state.tick_event.wait()
+
         # Mix
         for i in CHANNELS:
-            channel_locks[i].acquire()
-            tmp_buffer += channel_buffer[i]
-            channel_locks[i].release()
+            thread_info.channel_locks[i].acquire()
+            tmp_buffer += thread_info.channel_buffer[i]
+            thread_info.channel_locks[i].release()
 
         # Average
         tmp_buffer = (tmp_buffer.astype(np.float32) / len(CHANNELS)).astype(np.int8)
 
         # Pass the output to the player
-        output_lock.acquire()
-        output_buffer[:] = tmp_buffer
-        output_lock.release()
-
-        clk_state.tick_event.wait()
-
+        thread_info.output_lock.acquire()
+        thread_info.output_buffer[:] = tmp_buffer
+        thread_info.output_lock.release()
     # ---- end of profiled code
+
     if USE_PROFILER:
         profiler.stop()
         profiler.output(HTMLRenderer(show_all=True, timeline=True))
@@ -106,7 +107,7 @@ def mixer(channel_buffer, output_buffer: NDArray[np.int8], channel_locks: list[L
 
 
 # Manages the sound settings, playback, creation and destruction of the audio stream
-def player(buffer: NDArray[np.int8], output_lock: Lock, stop_flag: Event):
+def player(buffer: NDArray[np.int8], thread_info: PlayerThreadInfo):
     if USE_PROFILER:
         profiler = pyinstrument.Profiler()
         profiler.start()
@@ -120,13 +121,15 @@ def player(buffer: NDArray[np.int8], output_lock: Lock, stop_flag: Event):
                     input=False,
                     output=True)
 
+    # signal that the player is ready
+    thread_info.start_flag.set()
+
     # Wait for the beginning of new frame and playback the buffer
-    while not stop_flag.is_set():
+    while not thread_info.stop_flag.is_set():
         # Once the mixer stops writing, cache the buffer
-        output_lock.acquire()
+        thread_info.output_lock.acquire()
         cache = buffer.tobytes()            # read
-        buffer[:] = silence(BUFFER_SIZE)    # clear
-        output_lock.release()
+        thread_info.output_lock.release()
 
         # Playback
         stream.write(cache)
