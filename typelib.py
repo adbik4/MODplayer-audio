@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from threading import Event, Lock
 from numpy.typing import NDArray
 import numpy as np
+import queue
 
 # global constants
 TICK_RATE = 60 / (BPM * TPB)
@@ -15,15 +16,12 @@ BUFFER_SIZE = int(TICK_RATE * PLAYBACK_RATE)
 # are always perfectly synchronised and can resume from any moment in the song
 
 @dataclass
-class ClockState:
-    tick_event: Event
+class BeatPtr:
     length: int = 127
     repeat_idx: int = 127
 
     pattern_idx: int = 0
     note_idx: int = 0
-
-    next_tick = time.perf_counter() + TICK_RATE
 
     # Modulo and looping logic
     def __setattr__(self, key, value):
@@ -61,35 +59,25 @@ class ChannelState:
         self.current_effect = continued_note.effect
 
 
-# Contains the flags, events and locks for the clock thread
-@dataclass
-class ClockThreadInfo:
-    start_flag: Event
-    stop_flag:  Event
-
-
 # Contains the flags, events and locks for the channel thread
 @dataclass
 class ChannelThreadInfo:
-    stop_flag:      Event
+    beat_ptr:       BeatPtr
     channel_buffer: NDArray[np.int8]
     channel_locks:  list[Lock]
+    stop_flag:      Event
 
 
 # Contains the flags, events and locks for the mixer thread
 @dataclass
 class MixerThreadInfo:
+    beat_ptr:       BeatPtr
     channel_buffer: NDArray[np.int8]
-    output_buffer:  NDArray[np.int8]
     channel_locks:  list[Lock]
-    output_lock:    Lock
     stop_flag:      Event
 
 
 # Contains the flags, events and locks for the player thread
 @dataclass
 class PlayerThreadInfo:
-    output_buffer:  NDArray[np.int8]
-    output_lock:    Lock
-    start_flag:     Event
     stop_flag:      Event
