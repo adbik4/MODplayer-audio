@@ -1,11 +1,11 @@
 import time
+import threading
+from multiprocessing import Lock, Event
 from modformat import Note, MAX_NOTE_COUNT
 from settings import BPM, TPB, PLAYBACK_RATE
 from dataclasses import dataclass
-from threading import Event, Lock
 from numpy.typing import NDArray
 import numpy as np
-import queue
 
 # global constants
 TICK_RATE = 60 / (BPM * TPB)
@@ -37,6 +37,26 @@ class BeatPtr:
         else:
             super().__setattr__(key, value)
 
+# Increments the shared beat pointer
+def increment_beat_ptr(beat_ptr: dict):
+    # Increment note
+    new_note = beat_ptr["note_idx"] + 1
+    if new_note < MAX_NOTE_COUNT:
+        # Still in bounds
+        beat_ptr["note_idx"] = new_note
+    else:
+        # Reset note
+        beat_ptr["note_idx"] = 0
+
+        # Increment pattern
+        new_pattern = beat_ptr["pattern_idx"] + 1
+        if new_pattern < beat_ptr["length"] and new_pattern < beat_ptr["repeat_idx"]:
+            # Still in bounds
+            beat_ptr["pattern_idx"] = new_pattern
+        else:
+            # Completely reset
+            beat_ptr["note_idx"] = 0
+            beat_ptr["pattern_idx"] = 0
 
 # Keeps track of the currently playing note and which effects are playing
 
@@ -61,9 +81,7 @@ class ChannelState:
 
 # Contains the flags, events and locks for the channel thread
 @dataclass
-class ChannelThreadInfo:
-    beat_ptr:       BeatPtr
-    channel_buffer: NDArray[np.int8]
+class ChannelProcInfo:
     channel_locks:  list[Lock]
     stop_flag:      Event
 
@@ -71,8 +89,6 @@ class ChannelThreadInfo:
 # Contains the flags, events and locks for the mixer thread
 @dataclass
 class MixerThreadInfo:
-    beat_ptr:       BeatPtr
-    channel_buffer: NDArray[np.int8]
     channel_locks:  list[Lock]
     stop_flag:      Event
 
