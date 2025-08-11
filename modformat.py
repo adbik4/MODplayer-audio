@@ -7,6 +7,7 @@ from dataclasses import dataclass, fields, field
 MAGIC_IDS = ['M.K', '4CHN', '6CHN', '8CHN', 'FLT4', 'FLT8']
 CHANNEL_COUNT = 4
 MAX_NOTE_COUNT = 64
+NO_LOOP = 2
 
 # addresses:
 SONGNAME_OFFSET = 0x0000
@@ -41,6 +42,7 @@ class Sample:  # holds a sample track
     volume: int  # volume
     loopstart: int  # no of byte offset from start of sample
     looplength: int  # no of samples in loop [in bytes]
+    has_loop: bool
     data: list[int] = field(default_factory=list)  # the actual sample data
 
 
@@ -185,15 +187,6 @@ class ModParser:
     def _loadSampleInfo(self, f: BinaryIO) -> list[Sample]:
         sample_array = []
         for i in range(self.max_sample_count):
-
-            # debug: dump the raw two bytes at this sample offset
-            # offset = SAMPLEARR_OFFSET + SAMPLEBLOCK_SIZE * i
-            # f.seek(offset + SAMPLENAME_LEN + 2 + 1 + 1 + 2)  # point to the two-byte length field
-            # two = f.read(2)
-            # print("at sample", i, "offset", hex(offset + SAMPLENAME_LEN), "bytes", two.hex(),
-            #       "big:", int.from_bytes(two, 'big'),
-            #       "little:", int.from_bytes(two, 'little'))
-
             f.seek(SAMPLEARR_OFFSET + SAMPLEBLOCK_SIZE * i)
             name = self._toString(f.read(SAMPLENAME_LEN))
             length = self._toUInt_BE(f.read(2)) * 2
@@ -201,8 +194,9 @@ class ModParser:
             volume = self._toUInt_BE(f.read(1))
             loopstart = self._toUInt_BE(f.read(2)) * 2
             looplength = self._toUInt_BE(f.read(2)) * 2
+            has_loop = False if (looplength == NO_LOOP) else True
 
-            sample_array.append(Sample(name, length, finetune, volume, loopstart, looplength))
+            sample_array.append(Sample(name, length, finetune, volume, loopstart, looplength, has_loop))
         return sample_array
 
     # length of the song

@@ -28,7 +28,7 @@ def main():
                            repeat_idx=song.repeat_idx,
                            pattern_idx=START_PATTERN,
                            note_idx=START_NOTE)
-    clock_thread = threading.Thread(target=clock, args=(clk_state,), daemon=True)
+    clock_thread = threading.Thread(target=clock, args=(clk_state, stop_flag,))
     clock_thread.start()
 
     # Prepare the channels output buffer
