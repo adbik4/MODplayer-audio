@@ -1,43 +1,45 @@
+import samplerate
 import numpy as np
 from numpy.typing import NDArray
+from copy import deepcopy
 from settings import PLAYBACK_RATE
 from modformat import Sample
 from typelib import ChannelState, BUFFER_SIZE
 
 # ---- local constants
 
-SAMPLE_RATE = 16000
+RECORD_RATE = 16574
+PRIMARY_PERIOD = 214
+
 
 # ---- function definitions
+def transpose(sample: Sample, converter: samplerate.Resampler, target_period: int) -> Sample:
+    # Create an independent copy
+    result = deepcopy(sample)
+
+    scale_factor = target_period / (PRIMARY_PERIOD * RECORD_RATE/PLAYBACK_RATE)
+    print(scale_factor)
+
+    # Transpose the sample and update its attributes
+    result.data = converter.process(sample.data, ratio=scale_factor)
+
+    result.length = len(result.data)
+    result.loopstart = int(sample.loopstart * scale_factor)
+    result.looplength = int(sample.looplength * scale_factor)
+    return result
 
 
-def interpolate(sample: Sample) -> Sample:
-    stretch_factor = np.round(PLAYBACK_RATE / SAMPLE_RATE)
-
-    # this is the interpolation part
-    sample.data = np.repeat(sample.data, stretch_factor).tolist()
-    # TODO: add more interpolation options
-
-    sample.length = int(sample.length * stretch_factor)
-    sample.loopstart = int(sample.loopstart * stretch_factor)
-    sample.looplength = int(sample.looplength * stretch_factor)
-    return sample
-
-
-def extract_view(sample: Sample, frame_no: int) -> NDArray[np.int8]:
-    # Convert to Numpy array
-    data = np.array(sample.data, dtype=np.int8)
-
+def extract_view(sample: Sample, frame_no: int) -> NDArray[np.float32]:
     # Allocate buffer
     result = silence(BUFFER_SIZE)
 
     # Handle loop vs non-loop regions
     if sample.has_loop:
-        loop_region = data[sample.loopstart:sample.loopstart + sample.looplength]
+        loop_region = sample.data[sample.loopstart:sample.loopstart + sample.looplength]
         total_len = sample.length
     else:
         loop_region = None
-        total_len = len(data)
+        total_len = len(sample.data)
 
     # Playback position in samples
     start_sample = frame_no * BUFFER_SIZE
@@ -53,7 +55,7 @@ def extract_view(sample: Sample, frame_no: int) -> NDArray[np.int8]:
         slice_end = min(end_sample, total_len)
         chunk_len = slice_end - start_sample  # always >= 0 now
         if chunk_len > 0:
-            result[:chunk_len] = data[start_sample:slice_end]
+            result[:chunk_len] = sample.data[start_sample:slice_end]
         return result
 
     # Loop exists
@@ -66,7 +68,7 @@ def extract_view(sample: Sample, frame_no: int) -> NDArray[np.int8]:
             # Before loop starts
             chunk_end = min(sample.loopstart, pos + BUFFER_SIZE - out_pos)
             chunk_len = chunk_end - pos
-            result[out_pos:out_pos + chunk_len] = data[pos:pos + chunk_len]
+            result[out_pos:out_pos + chunk_len] = sample.data[pos:pos + chunk_len]
             pos += chunk_len
             out_pos += chunk_len
         else:
@@ -80,23 +82,18 @@ def extract_view(sample: Sample, frame_no: int) -> NDArray[np.int8]:
     return result
 
 
-def transpose(data: NDArray[np.int8], period: int) -> NDArray[np.int8]:
-    # TODO: implement pitch renderer
-    return data
-
-
-def apply_effect(data: NDArray[np.int8], effect_id: int) -> NDArray[np.int8]:
+def apply_effect(data: NDArray[np.float32], effect_id: int) -> NDArray[np.float32]:
     # TODO: implement effect renderer
     return data
 
 
-def silence(length: int) -> NDArray[np.int8]:
-    return np.zeros(length, dtype=np.int8)
+def silence(length: int) -> NDArray[np.float32]:
+    return np.zeros(length, dtype=np.float32)
 
 
 # ---- the note renderer
 
-def render_frame(channel_state: ChannelState, samplelist: list[Sample]) -> NDArray[np.int8]:
+def render_frame(channel_state: ChannelState, converter: samplerate.Resampler, samplelist: list[Sample]) -> NDArray[np.float32]:
 
     if channel_state.current_sample is None:
         return silence(BUFFER_SIZE)
@@ -104,15 +101,15 @@ def render_frame(channel_state: ChannelState, samplelist: list[Sample]) -> NDArr
     # Extract the right sample object
     sample = samplelist[channel_state.current_sample]
 
-    # Get a looped or trimmed sample view which is exactly BUFFER_SIZE
-    trimmed_data = extract_view(sample, channel_state.current_frame)
-
     # Transpose to the current frequency
-    transposed_sample = transpose(trimmed_data, channel_state.current_period)
+    transposed_sample = transpose(sample, converter, channel_state.current_period)
+
+    # Get a looped or trimmed sample view which is exactly BUFFER_SIZE
+    trimmed_data = extract_view(transposed_sample, channel_state.current_frame)
 
     # Apply the current effect
-    final_sample = apply_effect(transposed_sample, channel_state.current_effect)
+    final_sample = apply_effect(trimmed_data, channel_state.current_effect)
 
-    # TODO: add smoothing with a window
+    # TODO: add smoothing with a window?
 
     return final_sample

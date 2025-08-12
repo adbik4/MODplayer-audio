@@ -1,11 +1,12 @@
-from multiprocessing import Process, shared_memory, Manager, Lock
+from threading import Thread
+from multiprocessing import Process, shared_memory, Manager, Lock, Event
 
+import time
 import queue
-from managers import *
+from managers import channel, mixer, player
 from settings import FILEPATH, CHANNELS, START_PATTERN, START_NOTE
 from modformat import ModFile, CHANNEL_COUNT
-from audioprocessing import interpolate
-from typelib import BUFFER_SIZE, ChannelProcInfo, MixerThreadInfo, PlayerThreadInfo
+from typelib import BUFFER_SIZE, MixerThreadInfo, PlayerThreadInfo, BeatPtr
 from dataclasses import asdict
 
 
@@ -19,44 +20,39 @@ def main():
                        pattern_idx=START_PATTERN,
                        note_idx=START_NOTE)
 
-    # upscale the samplelist
-    hires_samplelist = []
-    for sample in song.samplelist:
-        hires_samplelist.append(interpolate(sample))
-    song.setSampleList(hires_samplelist)
-
-    # Prepare the channels shared memory output buffer and output queue
+    # Prepare the channels shared memory output buffer
     shm_list = []
     shm_names = []
     for _ in range(CHANNEL_COUNT):
-        shm = shared_memory.SharedMemory(create=True, size=BUFFER_SIZE)
+        shm = shared_memory.SharedMemory(create=True, size=BUFFER_SIZE*4)
         shm_list.append(shm)
         shm_names.append(shm.name)
 
-    output_queue = queue.Queue()
+    # Prepare the output queue
+    output_queue = queue.Queue(10)
 
     # Start processes and Threads and manage their shared data
     with Manager() as manager:
         shrd_beat_ptr = manager.dict(asdict(beat_ptr))
-        stop_flag = Event()  # For graceful shutdown, signals to everyone when to stop
+        stop_flag = Event()                           # For graceful shutdown, signals to everyone when to stop
         shared_ch_locks = [Lock() for _ in range(4)]  # signals to the mixer when the channels finish writing
 
         # Start the channel processes and store them
         ch_processes = []
         for i in CHANNELS:
             if 0 <= i <= 3:
-                t = Process(target=channel, args=(i, song, shm_names[i], shrd_beat_ptr, shared_ch_locks, stop_flag))
+                t = Process(target=channel, args=(i, song, shm_names[i], shrd_beat_ptr, shared_ch_locks))
                 t.start()
                 ch_processes.append(t)
 
         # Start the mixer
         mixer_thread_info = MixerThreadInfo(shared_ch_locks, stop_flag)
-        mixer_thread = threading.Thread(target=mixer, args=(shm_names, output_queue, shrd_beat_ptr, mixer_thread_info,))
+        mixer_thread = Thread(target=mixer, args=(shm_names, output_queue, shrd_beat_ptr, mixer_thread_info,))
         mixer_thread.start()
 
         # Start the player
         player_thread_info = PlayerThreadInfo(stop_flag)
-        player_thread = threading.Thread(target=player, args=(output_queue, player_thread_info,))
+        player_thread = Thread(target=player, args=(output_queue, player_thread_info,))
         player_thread.start()
 
         print("NOW PLAYING: ", song.name)

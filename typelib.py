@@ -1,11 +1,7 @@
-import time
-import threading
 from multiprocessing import Lock, Event
 from modformat import Note, MAX_NOTE_COUNT
 from settings import BPM, TPB, PLAYBACK_RATE
 from dataclasses import dataclass
-from numpy.typing import NDArray
-import numpy as np
 
 # global constants
 TICK_RATE = 60 / (BPM * TPB)

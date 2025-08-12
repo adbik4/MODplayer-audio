@@ -3,6 +3,9 @@ from __future__ import annotations
 from typing import BinaryIO
 from dataclasses import dataclass, fields, field
 
+import numpy as np
+from numpy.typing import NDArray
+
 # constants:
 MAGIC_IDS = ['M.K', '4CHN', '6CHN', '8CHN', 'FLT4', 'FLT8']
 CHANNEL_COUNT = 4
@@ -41,9 +44,9 @@ class Sample:  # holds a sample track
     finetune: int  # finetune value for dropping or lifting the pitch
     volume: int  # volume
     loopstart: int  # no of byte offset from start of sample
-    looplength: int  # no of samples in loop [in bytes]
+    looplength: int  # no of samples in loop
     has_loop: bool
-    data: list[int] = field(default_factory=list)  # the actual sample data
+    data: NDArray[np.float32] = field(default_factory=lambda: np.array([], dtype=np.float32))  # the actual sample data
 
 
 @dataclass
@@ -157,6 +160,10 @@ class ModParser:
         f.seek(offset)
         return f.read(length)
 
+    @staticmethod
+    def _tofloat32_np(data: list[int]) -> NDArray[np.float32]:
+        return np.array(data, dtype=np.float32) / 127
+
     # ---- data processing
 
     # extract a smaller sequence of bits from a bytes object. Returns an int
@@ -251,7 +258,7 @@ class ModParser:
             sample = sample_array[i]
             base_addr = PATTERNS_OFFSET + self._pattern_count * PATTERN_SIZE
             address = base_addr + offset
-            sample.data = list(self._readBlock(f, address, sample.length))
+            sample.data = self._tofloat32_np(list(self._readBlock(f, address, sample.length)))
             offset += sample.length
         return sample_array
 
