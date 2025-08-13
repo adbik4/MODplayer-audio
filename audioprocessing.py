@@ -18,14 +18,13 @@ def transpose(sample: Sample, converter: samplerate.Resampler, target_period: in
     result = deepcopy(sample)
 
     scale_factor = target_period / (PRIMARY_PERIOD * RECORD_RATE/PLAYBACK_RATE)
-    print(scale_factor)
 
     # Transpose the sample and update its attributes
     result.data = converter.process(sample.data, ratio=scale_factor)
 
     result.length = len(result.data)
-    result.loopstart = int(sample.loopstart * scale_factor)
-    result.looplength = int(sample.looplength * scale_factor)
+    result.loopstart = int(round(sample.loopstart * scale_factor))
+    result.looplength = int(round(sample.looplength * scale_factor))
     return result
 
 

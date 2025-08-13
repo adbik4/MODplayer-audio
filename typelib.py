@@ -1,6 +1,10 @@
+import pyinstrument
+import sys
+import functools
+from pyinstrument.renderers import HTMLRenderer
 from multiprocessing import Lock, Event
 from modformat import Note, MAX_NOTE_COUNT
-from settings import BPM, TPB, PLAYBACK_RATE
+from settings import BPM, TPB, PLAYBACK_RATE, USE_PROFILER
 from dataclasses import dataclass
 
 # global constants
@@ -54,8 +58,8 @@ def increment_beat_ptr(beat_ptr: dict):
             beat_ptr["note_idx"] = 0
             beat_ptr["pattern_idx"] = 0
 
-# Keeps track of the currently playing note and which effects are playing
 
+# Keeps track of the currently playing note and which effects are playing
 @dataclass
 class ChannelState:
     current_frame: int = 0
@@ -93,3 +97,27 @@ class MixerThreadInfo:
 @dataclass
 class PlayerThreadInfo:
     stop_flag:      Event
+
+
+# --- decorators
+def profile(func):
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        global profiler
+        if USE_PROFILER:
+            profiler = pyinstrument.Profiler()
+            profiler.start()
+        # ---- profiled code
+        func(*args, **kwargs)
+        # ---- end of profiled code
+        if USE_PROFILER:
+            profiler.stop()
+            profiler.output(HTMLRenderer(show_all=True, timeline=True))
+            profiler.open_in_browser(timeline=False)
+
+        # exit normally
+        # cleanup
+        print(f"exiting {func.__name__}")
+        sys.exit(0)
+
+    return wrapper

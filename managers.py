@@ -1,32 +1,27 @@
-import sys
 import queue
 import pyaudio
 
 import numpy as np
 import samplerate
 from multiprocessing import shared_memory, Lock
-from typelib import ChannelState, increment_beat_ptr, MixerThreadInfo, PlayerThreadInfo, BUFFER_SIZE, PLAYBACK_RATE
+from typelib import ChannelState, increment_beat_ptr, MixerThreadInfo, PlayerThreadInfo
+from typelib import profile, BUFFER_SIZE, PLAYBACK_RATE
 from modformat import ModFile
-from settings import CHANNELS, USE_PROFILER, INTERPOLATION
+from settings import CHANNELS, INTERPOLATION
 from audioprocessing import render_frame, silence
 
-import pyinstrument
-from pyinstrument.renderers import HTMLRenderer
+# TODO: create custom thread decorator
+# TODO: add visualizaton graph renderer
 
 
 # ---- thread definitions
-
 # Keeps track of the current note to play and calls the render_frame function
+@profile
 def channel(channel_no: int, song: ModFile, shm_name: str, beat_ptr: dict, channel_locks: list[Lock]):
-    if USE_PROFILER:
-        profiler = pyinstrument.Profiler()
-        profiler.start()
-
-    # ---- profiled code
     # Initialise the channel state
     channel_state = ChannelState()
 
-    # Initialise the samplerate converter
+    # Create the samplerate converter
     converter = samplerate.Resampler(INTERPOLATION)
 
     #  Create a numpy array view on the shared memory buffer
@@ -52,28 +47,16 @@ def channel(channel_no: int, song: ModFile, shm_name: str, beat_ptr: dict, chann
 
             # Render a new frame and pass it to the mixer
             with channel_locks[channel_no]:
-                print(channel_state)
                 audio_data = render_frame(channel_state, converter, song.samplelist)
                 buffer_np[:] = audio_data
     finally:
-        # ---- end of profiled code
-
-        if USE_PROFILER:
-            profiler.stop()
-            profiler.output(HTMLRenderer(show_all=True, timeline=True))
-            profiler.open_in_browser(timeline=False)
-
-        # exit normally
+        # cleanup
         shm.close()
-        sys.exit(0)
 
 
-# Mixes channels and passes them to the player
+# Mixes channels and passes them to the player\
+@profile
 def mixer(shm_names: str, output_queue: queue, beat_ptr: dict, thread_info: MixerThreadInfo):
-    if USE_PROFILER:
-        profiler = pyinstrument.Profiler()
-        profiler.start()
-
     # Create a numpy array view on the shared memory buffer
     shm_buffer = []
     for name in shm_names:
@@ -103,26 +86,15 @@ def mixer(shm_names: str, output_queue: queue, beat_ptr: dict, thread_info: Mixe
             thread_info.channel_locks[j].release()
 
         increment_beat_ptr(beat_ptr)
-    # ---- end of profiled code
 
-    if USE_PROFILER:
-        profiler.stop()
-        profiler.output(HTMLRenderer(show_all=True, timeline=True))
-        profiler.open_in_browser(timeline=False)
-
-    # exit normally
+    # cleanup
     for shm in shm_buffer:
         shm.close()
-    sys.exit(0)
 
 
 # Manages the sound settings, playback, creation and destruction of the audio stream
+@profile
 def player(output_queue: queue, thread_info: PlayerThreadInfo):
-    if USE_PROFILER:
-        profiler = pyinstrument.Profiler()
-        profiler.start()
-
-    # ---- profiled code
     # Initialize pyAudio
     p = pyaudio.PyAudio()
     stream = p.open(format=pyaudio.paFloat32,
@@ -141,12 +113,3 @@ def player(output_queue: queue, thread_info: PlayerThreadInfo):
     stream.stop_stream()
     stream.close()
     p.terminate()
-    # ---- end of profiled code
-
-    if USE_PROFILER:
-        profiler.stop()
-        profiler.output(HTMLRenderer(show_all=True, timeline=True))
-        profiler.open_in_browser(timeline=False)
-
-    # exit normally
-    sys.exit(0)
