@@ -1,5 +1,5 @@
-FILEPATH = "examples/_yes.mod"
-CHANNELS = [0]                      # choose from [0, 1, 2, 3]
+FILEPATH = "examples/the_objttze.mod"
+CHANNELS = [0, 1, 2, 3]                      # choose from [0, 1, 2, 3]
 START_PATTERN, START_NOTE = (0, 0)
 
 BPM = 125

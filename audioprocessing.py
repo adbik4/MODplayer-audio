@@ -22,9 +22,11 @@ def transpose(sample: Sample, converter: samplerate.Resampler, target_period: in
     # Transpose the sample and update its attributes
     result.data = converter.process(sample.data, ratio=scale_factor)
 
-    result.length = len(result.data)
-    result.loopstart = int(round(sample.loopstart * scale_factor))
-    result.looplength = int(round(sample.looplength * scale_factor))
+    transform_ratio = len(result.data) / sample.length
+    result.length = int(np.round(sample.length * transform_ratio))
+    result.loopstart = int(np.round(sample.loopstart * transform_ratio))
+    result.looplength = int(np.round(sample.looplength * transform_ratio))
+
     return result
 
 
