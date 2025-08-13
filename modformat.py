@@ -162,7 +162,7 @@ class ModParser:
 
     @staticmethod
     def _tofloat32_np(data: list[int]) -> NDArray[np.float32]:
-        return np.array(data, dtype=np.float32) / 127
+        return np.array(data, dtype=np.int8).astype(np.float32) / 127
 
     # ---- data processing
 

@@ -12,7 +12,18 @@ RECORD_RATE = 16574
 PRIMARY_PERIOD = 214
 
 
-# ---- function definitions
+# ---- generators
+
+def hann(size: int) -> NDArray[np.float32]:
+    n = np.arange(size, dtype=np.float32)
+    return np.sin(np.pi/size * n)**2
+
+
+def silence(length: int) -> NDArray[np.float32]:
+    return np.zeros(length, dtype=np.float32)
+
+
+# ---- sample operations
 def transpose(sample: Sample, converter: samplerate.Resampler, target_period: int) -> Sample:
     # Create an independent copy
     result = deepcopy(sample)
@@ -88,8 +99,18 @@ def apply_effect(data: NDArray[np.float32], effect_id: int) -> NDArray[np.float3
     return data
 
 
-def silence(length: int) -> NDArray[np.float32]:
-    return np.zeros(length, dtype=np.float32)
+def apply_edge_fade(samples, fade_len=128):
+    fade_in = np.sin(np.linspace(0, np.pi / 2, fade_len))**2
+    fade_out = fade_in[::-1]
+    samples[:fade_len] *= fade_in
+    samples[-fade_len:] *= fade_out
+    return samples
+
+
+def fade_in(samples, fade_len=128):
+    fade_in = np.sin(np.linspace(0, np.pi / 2, fade_len))**2
+    samples[:fade_len] *= fade_in
+    return samples
 
 
 # ---- the note renderer
@@ -103,14 +124,18 @@ def render_frame(channel_state: ChannelState, converter: samplerate.Resampler, s
     sample = samplelist[channel_state.current_sample]
 
     # Transpose to the current frequency
-    transposed_sample = transpose(sample, converter, channel_state.current_period)
+    dynamic_sample = transpose(sample, converter, channel_state.current_period)
 
     # Get a looped or trimmed sample view which is exactly BUFFER_SIZE
-    trimmed_data = extract_view(transposed_sample, channel_state.current_frame)
+    dynamic_sample = extract_view(dynamic_sample, channel_state.current_frame)
 
     # Apply the current effect
-    final_sample = apply_effect(trimmed_data, channel_state.current_effect)
+    dynamic_sample = apply_effect(dynamic_sample, channel_state.current_effect)
 
     # TODO: add smoothing with a window?
+    # if channel_state.current_frame == 0:
+    #     dynamic_sample = fade_in(dynamic_sample, fade_len=1000)
 
-    return final_sample
+    dynamic_sample = apply_edge_fade(dynamic_sample, fade_len=64)
+
+    return dynamic_sample

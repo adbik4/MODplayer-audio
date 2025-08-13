@@ -3,7 +3,7 @@ from multiprocessing import Process, shared_memory, Manager, Lock, Event
 
 import time
 import queue
-from managers import channel, mixer, player
+from modules import channel, mixer, player, plotter
 from settings import FILEPATH, CHANNELS, START_PATTERN, START_NOTE
 from modformat import ModFile, CHANNEL_COUNT
 from typelib import BUFFER_SIZE, MixerThreadInfo, PlayerThreadInfo, BeatPtr
@@ -35,19 +35,23 @@ def main():
     with Manager() as manager:
         shrd_beat_ptr = manager.dict(asdict(beat_ptr))
         stop_flag = Event()                           # For graceful shutdown, signals to everyone when to stop
-        shared_ch_locks = [Lock() for _ in range(4)]  # signals to the mixer when the channels finish writing
+        shared_ch_locks = [Lock() for _ in range(CHANNEL_COUNT)] # signals to the mixer when the channels finish writing
 
         # Start the channel processes and store them
         ch_processes = []
         for i in CHANNELS:
             if 0 <= i <= 3:
-                t = Process(target=channel, args=(i, song, shm_names[i], shrd_beat_ptr, shared_ch_locks))
+                t = Process(target=channel, args=(i, song, shm_names[i], shrd_beat_ptr, shared_ch_locks,))
                 t.start()
                 ch_processes.append(t)
 
+        # Start the plotter
+        plotter_proc = Process(target=plotter, args=(shm_names, song.name, shared_ch_locks))
+        plotter_proc.start()
+
         # Start the mixer
         mixer_thread_info = MixerThreadInfo(shared_ch_locks, stop_flag)
-        mixer_thread = Thread(target=mixer, args=(shm_names, output_queue, shrd_beat_ptr, mixer_thread_info,))
+        mixer_thread = Thread(target=mixer, args=(shm_names, output_queue, shrd_beat_ptr, mixer_thread_info))
         mixer_thread.start()
 
         # Start the player
