@@ -2,7 +2,7 @@ import pyinstrument
 import sys
 import functools
 from pyinstrument.renderers import HTMLRenderer
-from multiprocessing import Lock, Event
+from multiprocessing import Lock, Event, Barrier
 from modformat import Note, MAX_NOTE_COUNT
 from settings import BPM, TPB, PLAYBACK_RATE, USE_PROFILER
 from dataclasses import dataclass
@@ -82,14 +82,15 @@ class ChannelState:
 # Contains the flags, events and locks for the channel thread
 @dataclass
 class ChannelProcInfo:
-    channel_locks:  list[Lock]
-    stop_flag:      Event
+    channel_barrier: Barrier
+    channel_lock:    Lock
+    stop_flag:       Event
 
 
 # Contains the flags, events and locks for the mixer thread
 @dataclass
 class MixerThreadInfo:
-    channel_locks:  list[Lock]
+    channel_lock:  Lock
     stop_flag:      Event
 
 

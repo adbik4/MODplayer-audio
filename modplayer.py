@@ -1,12 +1,13 @@
 from threading import Thread
-from multiprocessing import Process, shared_memory, Manager, Lock, Event
+from multiprocessing import Process, shared_memory, Manager, Event, Barrier, Queue
 
 import time
-import queue
-from modules import channel, mixer, player, plotter
+from functools import partial
+from audioprocessing import mix
+from modules import channel, player, plotter
 from settings import FILEPATH, CHANNELS, START_PATTERN, START_NOTE
 from modformat import ModFile, CHANNEL_COUNT
-from typelib import BUFFER_SIZE, MixerThreadInfo, PlayerThreadInfo, BeatPtr
+from typelib import BUFFER_SIZE, PlayerThreadInfo, BeatPtr
 from dataclasses import asdict
 
 
@@ -29,30 +30,29 @@ def main():
         shm_names.append(shm.name)
 
     # Prepare the output queue
-    output_queue = queue.Queue(10)
+    output_queue = Queue(1)
 
     # Start processes and Threads and manage their shared data
     with Manager() as manager:
-        shrd_beat_ptr = manager.dict(asdict(beat_ptr))
-        stop_flag = Event()                           # For graceful shutdown, signals to everyone when to stop
-        shared_ch_locks = [Lock() for _ in range(CHANNEL_COUNT)] # signals to the mixer when the channels finish writing
+        # Create the thread safety objects
+        shared_beat_ptr = manager.dict(asdict(beat_ptr))  # Keeps track of the position in the song
+        stop_flag = Event()             # For graceful shutdown, signals to everyone when to stop
+
+        # enforces the 4 channels generate -> mix -> repeat rule
+        mix_action = partial(mix, shm_names, output_queue, shared_beat_ptr)
+        sync_barrier = Barrier(len(CHANNELS), action=mix_action)
 
         # Start the channel processes and store them
         ch_processes = []
         for i in CHANNELS:
             if 0 <= i <= 3:
-                t = Process(target=channel, args=(i, song, shm_names[i], shrd_beat_ptr, shared_ch_locks,))
+                t = Process(target=channel, args=(i, song, shm_names[i], shared_beat_ptr, sync_barrier))
                 t.start()
                 ch_processes.append(t)
 
         # Start the plotter
-        plotter_proc = Process(target=plotter, args=(shm_names, song.name, shared_ch_locks))
+        plotter_proc = Process(target=plotter, args=(shm_names, song.name))
         plotter_proc.start()
-
-        # Start the mixer
-        mixer_thread_info = MixerThreadInfo(shared_ch_locks, stop_flag)
-        mixer_thread = Thread(target=mixer, args=(shm_names, output_queue, shrd_beat_ptr, mixer_thread_info))
-        mixer_thread.start()
 
         # Start the player
         player_thread_info = PlayerThreadInfo(stop_flag)
@@ -71,7 +71,6 @@ def main():
             stop_flag.set()  # tell threads to exit
 
         # Wait for all the threads to finish
-        mixer_thread.join()
         player_thread.join()
         for t in ch_processes:
             t.join()

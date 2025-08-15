@@ -1,28 +1,28 @@
-import queue
 import pyaudio
-
 import numpy as np
 import samplerate
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 import matplotlib.style as mplstyle
-from matplotlib.patches import FancyBboxPatch
-from multiprocessing import shared_memory, Lock
-from typelib import ChannelState, increment_beat_ptr, MixerThreadInfo, PlayerThreadInfo
+from multiprocessing import shared_memory, Barrier, Queue
+from typelib import ChannelState, PlayerThreadInfo
 from typelib import profile, BUFFER_SIZE, PLAYBACK_RATE, TICK_RATE
 from modformat import ModFile, CHANNEL_COUNT
-from settings import CHANNELS, INTERPOLATION
-from audioprocessing import render_frame, silence
+from settings import INTERPOLATION
+from audioprocessing import render_frame
 
 
 # TODO: create custom thread decorator
 # TODO: add visualizaton graph renderer
 
+# ---- local constants
+VIEW_WIDTH = min(max(2, 256), BUFFER_SIZE)
+
 
 # ---- thread definitions
 # Keeps track of the current note to play and calls the render_frame function
 @profile
-def channel(channel_no: int, song: ModFile, shm_name: str, beat_ptr: dict, channel_locks: list[Lock]):
+def channel(channel_no: int, song: ModFile, shm_name: str, beat_ptr: dict, sync_barrier: Barrier):
     # Initialise the channel state
     channel_state = ChannelState()
 
@@ -51,58 +51,18 @@ def channel(channel_no: int, song: ModFile, shm_name: str, beat_ptr: dict, chann
                 channel_state.trigger(new_note)
 
             # Render a new frame and pass it to the mixer
-            with channel_locks[channel_no]:
-                audio_data = render_frame(channel_state, converter, song.samplelist)
-                buffer_np[:] = audio_data
+            audio_data = render_frame(channel_state, converter, song.samplelist)
+            buffer_np[:] = audio_data
+            sync_barrier.wait()     # wait for all the other threads and mixing to finish
+
     finally:
         # cleanup
         shm.close()
 
 
-# Mixes channels and passes them to the player\
-@profile
-def mixer(shm_names: str, output_queue: queue, beat_ptr: dict, thread_info: MixerThreadInfo):
-    # Create a numpy array view on the shared memory buffer
-    shm_buffer = []
-    for name in shm_names:
-        shm = shared_memory.SharedMemory(name=name)
-        shm_buffer.append(shm)
-
-    try:
-        while not thread_info.stop_flag.is_set():
-            # Clear workspace
-            mix_buffer = silence(BUFFER_SIZE)
-
-            # Mix
-            for i in CHANNELS:
-                with thread_info.channel_locks[i]:
-                    np_buffer = np.ndarray((BUFFER_SIZE,), dtype=np.float32, buffer=shm_buffer[i].buf)
-                    mix_buffer += np_buffer
-
-            # Average
-            mix_buffer /= len(CHANNELS)
-            mix_buffer = np.clip(mix_buffer, -1.0, 1.0)
-
-            # Pass the output to the player if theres place in the queue
-            try:
-                output_queue.put(mix_buffer.tobytes(), timeout=5)
-            except queue.Full:
-                # exit program even if the channels stopped responding
-                if thread_info.stop_flag.is_set():
-                    break
-                continue
-
-            increment_beat_ptr(beat_ptr)
-
-    finally:
-        # Cleanup
-        for shm in shm_buffer:
-            shm.close()
-
-
 # Manages the sound settings, playback, creation and destruction of the audio stream
 @profile
-def player(output_queue: queue, thread_info: PlayerThreadInfo):
+def player(output_queue: Queue, thread_info: PlayerThreadInfo):
     # Initialize pyAudio
     p = pyaudio.PyAudio()
     stream = p.open(format=pyaudio.paFloat32,
@@ -124,7 +84,7 @@ def player(output_queue: queue, thread_info: PlayerThreadInfo):
 
 
 @profile
-def plotter(shm_names: str, song_name: str, channel_locks: list[Lock]):
+def plotter(shm_names: str, song_name: str):
     # Create a numpy array view on the shared memory buffer
     shm_buffer = []
     for name in shm_names:
@@ -134,16 +94,15 @@ def plotter(shm_names: str, song_name: str, channel_locks: list[Lock]):
     # Persistent NumPy views for each channel
     shm_array = []
     for i in range(CHANNEL_COUNT):
-        with channel_locks[i]:
-            shm_array.append(np.ndarray((BUFFER_SIZE,), dtype=np.float32, buffer=shm_buffer[i].buf))
+        shm_array.append(np.ndarray((BUFFER_SIZE,), dtype=np.float32, buffer=shm_buffer[i].buf))
 
     # Create 4 subplots in a 2x2 grid
     fig, ax = plt.subplots(2, 2, figsize=(9, 9))
     ax = ax.flatten()
 
     # Theme setup
-    mplstyle.use(['dark_background', 'fast'])
     plt.rcParams["font.family"] = "Consolas"
+    mplstyle.use(['dark_background', 'fast'])
     fig.patch.set_facecolor("#111111")
 
     # Window setup
@@ -166,7 +125,7 @@ def plotter(shm_names: str, song_name: str, channel_locks: list[Lock]):
 
     # Create one Line2D per channel
     artists = [
-        ax[i].plot(np.zeros(BUFFER_SIZE, dtype=np.float32), linewidth=2, color="#00e6b8")[0]
+        ax[i].plot(np.zeros(VIEW_WIDTH, dtype=np.float32), linewidth=1, color="#00e6b8")[0]
         for i in range(CHANNEL_COUNT)
     ]
 
@@ -179,13 +138,20 @@ def plotter(shm_names: str, song_name: str, channel_locks: list[Lock]):
         ax[i].set_facecolor("#222222")
 
     def update(frame):
+        begin = ((VIEW_WIDTH+1) * frame) % BUFFER_SIZE
+        end = ((VIEW_WIDTH+1) * (frame+1) - 1) % BUFFER_SIZE
+
+        if begin > end:
+            return artists
+
         for i in range(CHANNEL_COUNT):
-            artists[i].set_ydata(shm_array[i])
+            artists[i].set_ydata(shm_array[i][begin:end])
         return artists
 
     try:
         # Do the animation
-        ani = animation.FuncAnimation(fig=fig, func=update, interval=TICK_RATE * 1000)
+        interv = TICK_RATE * 1000 * (VIEW_WIDTH/BUFFER_SIZE)
+        ani = animation.FuncAnimation(fig=fig, func=update, interval=interv)
         plt.show()
 
     except KeyboardInterrupt:
