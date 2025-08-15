@@ -37,6 +37,7 @@ class BeatPtr:
         else:
             super().__setattr__(key, value)
 
+
 # Increments the shared beat pointer
 def increment_beat_ptr(beat_ptr: dict):
     # Increment note

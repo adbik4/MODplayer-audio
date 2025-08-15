@@ -12,9 +12,6 @@ from settings import INTERPOLATION
 from audioprocessing import render_frame
 
 
-# TODO: create custom thread decorator
-# TODO: add visualizaton graph renderer
-
 # ---- local constants
 VIEW_WIDTH = min(max(2, 256), BUFFER_SIZE)
 

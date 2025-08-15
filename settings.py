@@ -1,4 +1,6 @@
 FILEPATH = "examples/brainbla.mod"           # good example: brainblast - pattern 18, BPM 120 TPB 4
+SHOW_VISUALIZER = True
+
 CHANNELS = [0, 1, 2, 3]                      # choose from [0, 1, 2, 3]
 START_PATTERN, START_NOTE = (18, 0)
 

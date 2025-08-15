@@ -5,10 +5,16 @@ import time
 from functools import partial
 from audioprocessing import mix
 from modules import channel, player, plotter
-from settings import FILEPATH, CHANNELS, START_PATTERN, START_NOTE
+from settings import FILEPATH, CHANNELS, START_PATTERN, START_NOTE, SHOW_VISUALIZER
 from modformat import ModFile, CHANNEL_COUNT
 from typelib import BUFFER_SIZE, PlayerThreadInfo, BeatPtr
 from dataclasses import asdict
+
+# TODO: large refactor
+# TODO: fix discontinuities
+# TODO: a note counter in the visualiser
+# TODO: artists description in the visualiser
+# TODO: THE EFFECTS RENDERER
 
 
 def main():
@@ -51,8 +57,9 @@ def main():
                 ch_processes.append(t)
 
         # Start the plotter
-        plotter_proc = Process(target=plotter, args=(shm_names, song.name))
-        plotter_proc.start()
+        if SHOW_VISUALIZER:
+            plotter_proc = Process(target=plotter, args=(shm_names, song.name))
+            plotter_proc.start()
 
         # Start the player
         player_thread_info = PlayerThreadInfo(stop_flag)

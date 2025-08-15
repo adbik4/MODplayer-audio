@@ -165,7 +165,8 @@ def mix(shm_names: shared_memory, output_queue: Queue, shared_beat_ptr: dict):
 
     # Average
     mix_buffer /= len(CHANNELS)
-    mix_buffer = np.clip(mix_buffer, -1.0, 1.0)
+
+    mix_buffer = np.clip(mix_buffer, -1.0, 1.0)     # for good measure
 
     output_queue.put(mix_buffer.tobytes(), timeout=5)
     increment_beat_ptr(shared_beat_ptr)
