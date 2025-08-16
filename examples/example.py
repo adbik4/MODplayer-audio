@@ -1,5 +1,5 @@
-from modformat import ModFile
-filepath = "examples/the_objttze.mod"
+from core.file import ModFile
+filepath = "the_objttze.mod"
 
 song = ModFile.open(filepath)
 sample_idx = 0

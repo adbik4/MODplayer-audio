@@ -1,17 +1,11 @@
-import samplerate
-import numpy as np
-from queue import Queue
 from numpy.typing import NDArray
 from copy import deepcopy
-from settings import PLAYBACK_RATE, CHANNELS
-from modformat import Sample
-from typelib import ChannelState, BUFFER_SIZE, increment_beat_ptr
-from multiprocessing import shared_memory
+import numpy as np
+import samplerate
 
-# ---- local constants
-
-RECORD_RATE = 16574
-PRIMARY_PERIOD = 214
+from settings import PLAYBACK_RATE
+from core.constants import PRIMARY_PERIOD, RECORD_RATE, BUFFER_SIZE
+from core.types import Sample
 
 
 # ---- generators
@@ -110,63 +104,3 @@ def apply_edge_fade(samples, fade_len=128):
     samples[:fade_len] *= fade_in
     samples[-fade_len:] *= fade_out
     return samples
-
-
-def fade_in(samples, fade_len=128):
-    fade_in = np.sin(np.linspace(0, np.pi / 2, fade_len))**2
-    samples[:fade_len] *= fade_in
-    return samples
-
-
-# ---- the note renderer
-
-def render_frame(channel_state: ChannelState, converter: samplerate.Resampler, samplelist: list[Sample]) -> NDArray[np.float32]:
-
-    if channel_state.current_sample is None:
-        return silence(BUFFER_SIZE)
-
-    # Extract the right sample object
-    sample = samplelist[channel_state.current_sample]
-
-    # Transpose to the current frequency
-    dynamic_sample = transpose(sample, converter, channel_state.current_period)
-
-    # Get a looped or trimmed sample view which is exactly BUFFER_SIZE
-    dynamic_sample = extract_view(dynamic_sample, channel_state.current_frame)
-
-    # Apply the current effect
-    dynamic_sample = apply_effect(dynamic_sample, channel_state.current_effect)
-
-    # if channel_state.current_frame == 0:
-    #     dynamic_sample = fade_in(dynamic_sample, fade_len=1000)
-
-    dynamic_sample = apply_edge_fade(dynamic_sample, fade_len=128)
-
-    return dynamic_sample
-
-
-# ---- the mixer
-# Mixes channels and passes them to the player
-def mix(shm_names: shared_memory, output_queue: Queue, shared_beat_ptr: dict):
-    # Create a numpy array view on the shared memory buffer
-    shm_buffer = []
-    for name in shm_names:
-        shm = shared_memory.SharedMemory(name=name)
-        shm_buffer.append(shm)
-
-    # Clear workspace
-    mix_buffer = silence(BUFFER_SIZE)
-
-    # Mix
-    for i in CHANNELS:
-        if 0 <= i <= 3:
-            np_buffer = np.ndarray((BUFFER_SIZE,), dtype=np.float32, buffer=shm_buffer[i].buf)
-            mix_buffer += np_buffer
-
-    # Average
-    mix_buffer /= len(CHANNELS)
-
-    mix_buffer = np.clip(mix_buffer, -1.0, 1.0)     # for good measure
-
-    output_queue.put(mix_buffer.tobytes(), timeout=5)
-    increment_beat_ptr(shared_beat_ptr)
