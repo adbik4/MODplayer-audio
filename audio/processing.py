@@ -4,7 +4,7 @@ import numpy as np
 import samplerate
 
 from settings import PLAYBACK_RATE
-from core.constants import PRIMARY_PERIOD, RECORD_RATE, BUFFER_SIZE
+from core.constants import PRIMARY_PERIOD, RECORD_RATE, BUFFER_SIZE, HALF_TONE
 from core.types import Sample
 
 
@@ -20,17 +20,23 @@ def silence(length: int) -> NDArray[np.float32]:
 
 
 # ---- sample operations
+def finetune(val: int) -> float:
+    if 8 <= val <= 15:
+        val -= 16
+    return HALF_TONE ** val
+
+
 def transpose(sample: Sample, converter: samplerate.Resampler, target_period: int) -> Sample:
     # Create an independent copy
     result = deepcopy(sample)
 
-    scale_factor = target_period / (PRIMARY_PERIOD * RECORD_RATE/PLAYBACK_RATE)
+    scale_factor = target_period / (PRIMARY_PERIOD * RECORD_RATE/PLAYBACK_RATE * finetune(sample.finetune))
 
     # Transpose the sample and update its attributes
     result.data = converter.process(sample.data, ratio=scale_factor)
 
-    transform_ratio = len(result.data) / sample.length
-    result.length = int(np.round(sample.length * transform_ratio))
+    transform_ratio = len(result.data) / len(sample.data)
+    result.length = int(np.round(len(sample.data) * transform_ratio))
     result.loopstart = int(np.round(sample.loopstart * transform_ratio))
     result.looplength = int(np.round(sample.looplength * transform_ratio))
 
@@ -47,7 +53,7 @@ def extract_view(sample: Sample, frame_no: int) -> NDArray[np.float32]:
     # Handle loop vs non-loop regions
     if sample.has_loop:
         loop_region = sample.data[sample.loopstart:sample.loopstart + sample.looplength]
-        total_len = sample.length
+        total_len = len(sample.data)
     else:
         loop_region = None
         total_len = len(sample.data)

@@ -33,34 +33,31 @@ def main():
         shm_names.append(shm.name)
 
     # Prepare the output queue
-    output_queue = Queue(1)
+    output_queue = Queue(1)     # increase if you experience stuttering
 
     with Manager() as manager:
-        # process safety and synchronization
+
+        # Process safety and synchronization
         beat_ptr_proxy = manager.dict(asdict(beat_ptr))
         mix_action = partial(mix, shm_names, output_queue, beat_ptr_proxy, song.length, song.repeat_idx)
         sync_barrier = Barrier(len(CHANNELS), action=mix_action)
 
-
         # Start the channel processes and store them
         ch_processes = [Process(target=channel, args=(i, song, shm_names[i], beat_ptr_proxy, sync_barrier))
                         for i in CHANNELS if 0 <= i <= 3]
-        for p in ch_processes:
-            p.start()
-
+        for p in ch_processes: p.start()
 
         # Start the plotter
         if SHOW_VISUALIZER:
             plotter_proc = Process(target=visualizer, args=(shm_names, song.name))
             plotter_proc.start()
 
-
         # Start the player
         player_thread = Thread(target=player, args=(output_queue,))
         player_thread.start()
 
-
         print("NOW PLAYING: ", song.name)
+
         try:
             while True:
                 time.sleep(1)
@@ -69,7 +66,6 @@ def main():
             print("Exiting program...")
 
         finally:
-            # Wait for all the threads to finish
             for t in ch_processes:
                 t.join()
             player_thread.join()
