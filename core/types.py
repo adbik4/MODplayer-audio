@@ -61,9 +61,9 @@ class Effect:
 
     def __call__(self, data: NDArray[np.float32]) -> NDArray[np.float32]:
         if self._arg2 is not None:
-            return self._effect_lookup[self._id](self._arg1, self._arg2, NDArray[np.float32])
+            return self._effect_lookup[self._id](self._arg1, self._arg2, data)
         else:
-            return self._effect_lookup[self._id](self._arg1, NDArray[np.float32])
+            return self._effect_lookup[self._id](self._arg1, data)
 
 
 # Keeps track of where the player currently is in the track so all the channels

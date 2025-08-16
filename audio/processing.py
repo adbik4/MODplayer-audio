@@ -10,10 +10,6 @@ from core.types import Sample, Effect
 
 # ---- generators
 
-def hann(size: int) -> NDArray[np.float32]:
-    n = np.arange(size, dtype=np.float32)
-    return np.sin(np.pi/size * n)**2
-
 
 def silence(length: int) -> NDArray[np.float32]:
     return np.zeros(length, dtype=np.float32)
@@ -105,6 +101,7 @@ def apply_effect(data: NDArray[np.float32], effect: Effect) -> NDArray[np.float3
 
 
 def apply_edge_fade(samples, fade_len=128):
+    # half of a hann window
     fade_in = np.sin(np.linspace(0, np.pi / 2, fade_len))**2
     fade_out = fade_in[::-1]
     samples[:fade_len] *= fade_in
