@@ -13,11 +13,12 @@ from audio.mixer import mix
 from audio.player import player
 from graphics.visualizer import visualizer
 
+# TODO: THE EFFECTS RENDERER
 # TODO: fix discontinuities
 # TODO: a note counter in the visualiser
 # TODO: artists description in the visualiser
-# TODO: THE EFFECTS RENDERER
-# TODO: add web functionality?
+# TODO: add download functionality?
+# TODO: Discrete Cosine Transform mixer
 
 
 def main():

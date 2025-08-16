@@ -4,7 +4,7 @@ from numpy.typing import NDArray
 from typing import BinaryIO
 import numpy as np
 
-from core.types import Sample, Note, Pattern
+from core.types import Sample, Note, Pattern, Effect
 from core.constants import MAX_NOTE_COUNT, CHANNEL_COUNT
 
 MAGIC_IDS = ['M.K', '4CHN', '6CHN', '8CHN', 'FLT4', 'FLT8']
@@ -123,19 +123,46 @@ class ModParser:
     # ---- data processing
 
     # extract a smaller sequence of bits from a bytes object. Returns an int
-    def _extractBits(self, data: bytes, start: int, end: int) -> int:
+    def _extractBits(self, data: bytes, start: int, end: int, as_type: str = 'int'):
         wordlen = len(data) * 8
+        result = 0
         if (wordlen > start >= 0) and (wordlen > end >= 0) and (start <= end):
             value = self._toUInt_BE(data)
             shifted = value >> (wordlen - end - 1)
             result = shifted & (2 ** (end - start + 1) - 1)
+
+        if as_type == 'int':
             return result
+        elif as_type == 'bytes':
+            return bytes(result)
+
+    # unpacks raw effect data
+    def _extractEffectInfo(self, data: bytes) -> Effect:
+        id = self._extractBits(data, 0, 3)
+
+        # E commands
+        if id == 14:
+            id = 16 + self._extractBits(data, 4, 7)
+            arg1 = self._extractBits(data, 8, 11)
+            return Effect(id, arg1)
+
+        # single argument commands
+        elif id in [1, 2, 3, 9, 11, 12, 13, 15]:
+            arg1 = self._extractBits(data, 4, 11)
+            return Effect(id, arg1)
+
+        # dual argument commands
+        elif id in [0, 4, 5, 6, 7, 10]:
+            arg1 = self._extractBits(data, 4, 7)
+            arg2 = self._extractBits(data, 8, 11)
+            return Effect(id, arg1, arg2)
 
     # unpacks raw note data
-    def _extractNoteInfo(self, data: bytes) -> tuple[int, int, int]:
+    def _extractNoteInfo(self, data: bytes) -> tuple[int, int, Effect]:
         sample = (self._extractBits(data, 0, 3) << 4) + self._extractBits(data, 16, 19) - 1
         period = self._extractBits(data, 4, 15)
-        effect = self._extractBits(data, 20, 31)
+        packed_effect = self._extractBits(data, 20, 31, as_type='bytes')
+        effect = self._extractEffectInfo(packed_effect)
         return sample, period, effect
 
     # ---- data structure operations

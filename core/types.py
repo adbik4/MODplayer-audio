@@ -1,8 +1,7 @@
 from __future__ import annotations
-
 from dataclasses import dataclass, field, fields
-from numpy.typing import NDArray
-import numpy as np
+
+from audio.effects import *
 
 
 @dataclass
@@ -21,7 +20,7 @@ class Sample:  # holds a sample track
 class Note:  # holds a note
     sample_idx: int
     period: int
-    effect: int
+    effect: Effect
 
 
 @dataclass
@@ -42,6 +41,31 @@ class Pattern:  # holds a pattern with 4 channels with 64 notes each
         setattr(self, field_name, value)
 
 
+# Stores information about effects
+class Effect:
+    _effect_lookup = [
+        arpeggio, slide_up, slide_down, portamento,
+        vibrato, portamento_w_vol_slide, vibrato_w_vol_slide, tremolo,
+        None, set_offset, vol_slide, pos_jump,
+        set_vol, pattern_break, None, set_speed,
+        set_filter, fineslide_up, fineslide_down, glissando,
+        set_vibrato, set_loop, jump_to_loop, set_tremolo,
+        None, retrig_note, fine_vol_slide_up, fine_vol_slide_down,
+        note_cut, note_delay, pattern_delay, invert_loop
+    ]
+
+    def __init__(self, id: int = 0, arg1: int = None, arg2: int = None):
+        self._id = id
+        self._arg1 = arg1
+        self._arg2 = arg2
+
+    def __call__(self, data: NDArray[np.float32]) -> NDArray[np.float32]:
+        if self._arg2 is not None:
+            return self._effect_lookup[self._id](self._arg1, self._arg2, NDArray[np.float32])
+        else:
+            return self._effect_lookup[self._id](self._arg1, NDArray[np.float32])
+
+
 # Keeps track of where the player currently is in the track so all the channels
 # are always perfectly synchronised and can resume from any moment in the song
 @dataclass
@@ -57,7 +81,7 @@ class ChannelState:
 
     current_sample: int = None
     current_period: int = 0
-    current_effect: int = 0
+    current_effect: Effect = Effect()
 
     def trigger(self, new_note: Note):
         self.current_frame = 0

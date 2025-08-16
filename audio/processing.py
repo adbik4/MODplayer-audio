@@ -5,7 +5,7 @@ import samplerate
 
 from settings import PLAYBACK_RATE
 from core.constants import PRIMARY_PERIOD, RECORD_RATE, BUFFER_SIZE, HALF_TONE
-from core.types import Sample
+from core.types import Sample, Effect
 
 
 # ---- generators
@@ -99,9 +99,9 @@ def extract_view(sample: Sample, frame_no: int) -> NDArray[np.float32]:
     return result
 
 
-def apply_effect(data: NDArray[np.float32], effect_id: int) -> NDArray[np.float32]:
-    # TODO: implement effect renderer
-    return data
+def apply_effect(data: NDArray[np.float32], effect: Effect) -> NDArray[np.float32]:
+    result = effect(data)
+    return result
 
 
 def apply_edge_fade(samples, fade_len=128):
