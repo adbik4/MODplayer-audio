@@ -1,5 +1,8 @@
 from __future__ import annotations
 from dataclasses import dataclass, field, fields
+from multiprocessing import Process, shared_memory, Queue
+from threading import Thread
+from typing import Union
 
 from audio.effects import *
 
@@ -92,3 +95,11 @@ class ChannelState:
     def increment(self, continued_note: Note):
         self.current_frame += 1
         self.current_effect = continued_note.effect
+
+
+@dataclass
+class ProcessInfo:
+    process_list: list[Union[Process, Thread]]
+    shm_list: list[shared_memory]
+    beat_ptr: BeatPtr
+    output_queue: Queue

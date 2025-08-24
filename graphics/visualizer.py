@@ -24,7 +24,7 @@ def visualizer(shm_names: str, song_name: str):
 
     try:
         # Create 4 subplots in a 2x2 grid
-        fig, ax = plt.subplots(2, 2, figsize=(9, 9))
+        fig, ax = plt.subplots(2, 2, figsize=(5, 5))
         ax = ax.flatten()
 
         # Theme setup
@@ -77,7 +77,7 @@ def visualizer(shm_names: str, song_name: str):
 
         # Do the animation
         interv = TICK_RATE * 1000 * (VIEW_WIDTH / BUFFER_SIZE)
-        ani = animation.FuncAnimation(fig=fig, func=update, interval=interv)
+        ani = animation.FuncAnimation(fig=fig, func=update, interval=interv, save_count=10)
         plt.show()
 
     except KeyboardInterrupt:
