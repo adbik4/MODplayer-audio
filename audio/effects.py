@@ -4,6 +4,7 @@ import numpy as np
 
 # arpeggio
 def arpeggio(arg1: int, arg2: int, data: NDArray[np.float32]) -> NDArray[np.float32]:
+    print("ARPEGGIO/NONE")
     return data  # do nothing
 
 

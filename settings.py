@@ -1,5 +1,5 @@
 FILEPATH = "examples/_yes.mod"           # good example: brainblast - pattern 18, BPM 120 TPB 4
-CHANNELS = [0, 1, 2, 3]                      # choose from [0, 1, 2, 3]
+CHANNELS = [2]                      # choose from [0, 1, 2, 3]
 START_PATTERN, START_NOTE = (0, 0)
 BPM = 120
 TPB = 4

@@ -33,7 +33,7 @@ NOTE_SIZE = 4
 
 
 @dataclass(frozen=True)     # immutable
-class ModFile:  # holds all of the information about a .MOD file
+class ModFile:  # holds all the information about a .MOD file
     name: str   # name of the song
     length: int  # length of the song in patterns
     repeat_idx: int  # pattern index where the tracker should loop
@@ -125,20 +125,30 @@ class ModParser:
     # extract a smaller sequence of bits from a bytes object. Returns an int
     def _extractBits(self, data: bytes, start: int, end: int, as_type: str = 'int'):
         wordlen = len(data) * 8
+        if wordlen == 0:
+            print("_extractBits() ERROR: can't accept empty data")
+            quit()
+
         result = 0
         if (wordlen > start >= 0) and (wordlen > end >= 0) and (start <= end):
             value = self._toUInt_BE(data)
             shifted = value >> (wordlen - end - 1)
             result = shifted & (2 ** (end - start + 1) - 1)
+        else:
+            print(start, end)
+            print("_extractBits() ERROR: end must be after the start")
+            quit()
 
         if as_type == 'int':
             return result
         elif as_type == 'bytes':
-            return bytes(result)
+            result_size = int(np.ceil((end-start) / 8))
+            return result.to_bytes(result_size, byteorder='big')
 
     # unpacks raw effect data
     def _extractEffectInfo(self, data: bytes) -> Effect:
         id = self._extractBits(data, 0, 3)
+        print(id)
 
         # E commands
         if id == 14:
@@ -161,8 +171,8 @@ class ModParser:
     def _extractNoteInfo(self, data: bytes) -> tuple[int, int, Effect]:
         sample = (self._extractBits(data, 0, 3) << 4) + self._extractBits(data, 16, 19) - 1
         period = self._extractBits(data, 4, 15)
-        packed_effect = self._extractBits(data, 20, 31, as_type='bytes')
-        effect = self._extractEffectInfo(packed_effect)
+        raw_effect = self._extractBits(data, 20, 31, as_type='bytes')
+        effect = self._extractEffectInfo(raw_effect)
         return sample, period, effect
 
     # ---- data structure operations
@@ -219,7 +229,7 @@ class ModParser:
         self._pattern_count = max(data) + 1  # save for later
         return data
 
-    # the actual note layout and rythm information
+    # the actual note layout and rhythm information
     # CALL loadPatternPositions() FIRST, because of pattern_count
     def _loadPatternData(self, f: BinaryIO) -> list[Pattern]:
         pattern_array = []
