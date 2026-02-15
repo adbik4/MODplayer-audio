@@ -24,7 +24,7 @@ def process_init(manager: Manager, song: ModFile) -> ProcessInfo:
         shm_names.append(shm.name)
 
     # Prepare the output queue
-    output_queue = Queue(1)     # increase if you experience stuttering
+    output_queue = Queue(2)     # increase if you experience stuttering
 
     # Process safety and synchronization
     beat_ptr_proxy = manager.dict(asdict(beat_ptr))

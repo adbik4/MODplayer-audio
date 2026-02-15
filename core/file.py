@@ -148,7 +148,6 @@ class ModParser:
     # unpacks raw effect data
     def _extractEffectInfo(self, data: bytes) -> Effect:
         id = self._extractBits(data, 0, 3)
-        print(id)
 
         # E commands
         if id == 14:

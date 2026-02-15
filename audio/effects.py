@@ -4,7 +4,6 @@ import numpy as np
 
 # arpeggio
 def arpeggio(arg1: int, arg2: int, data: NDArray[np.float32]) -> NDArray[np.float32]:
-    print("ARPEGGIO/NONE")
     return data  # do nothing
 
 
@@ -33,7 +32,6 @@ def vibrato_w_vol_slide(arg1: int, arg2: int, data: NDArray[np.float32]) -> NDAr
 
 
 def tremolo(arg1: int, arg2: int, data: NDArray[np.float32]) -> NDArray[np.float32]:
-    print("TREMOLO")
     return data  # do nothing
 
 
@@ -42,7 +40,6 @@ def set_offset(arg1: int, data: NDArray[np.float32]) -> NDArray[np.float32]:
 
 
 def vol_slide(arg1: int, arg2: int, data: NDArray[np.float32]) -> NDArray[np.float32]:
-    print("VOL_SLIDE")
     return data  # do nothing
 
 
@@ -51,7 +48,6 @@ def pos_jump(arg1: int, data: NDArray[np.float32]) -> NDArray[np.float32]:
 
 
 def set_vol(arg1: int, data: NDArray[np.float32]) -> NDArray[np.float32]:
-    print("SET_VOL")
     return data  # do nothing
 
 

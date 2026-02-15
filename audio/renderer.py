@@ -16,7 +16,7 @@ def render_frame(channel_state: ChannelState, converter: samplerate.Resampler, s
 
     dynamic_sample = transpose(sample, converter, channel_state.current_period)
     dynamic_sample = extract_view(dynamic_sample, channel_state.current_frame)
-    dynamic_sample = apply_effect(dynamic_sample, channel_state.current_effect)
-    dynamic_sample = apply_edge_fade(dynamic_sample, fade_len=128)
+    # dynamic_sample = apply_effect(dynamic_sample, channel_state.current_effect)
+    # dynamic_sample = apply_edge_fade(dynamic_sample, fade_len=128)
 
     return dynamic_sample
